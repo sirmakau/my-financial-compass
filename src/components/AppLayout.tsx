@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Wallet, ArrowLeftRight, MessageSquareText, LogOut, Sparkles } from "lucide-react";
+import { LayoutDashboard, Wallet, ArrowLeftRight, MessageSquareText, LogOut, Sparkles, BarChart3 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 
@@ -8,6 +8,7 @@ const links = [
   { to: "/accounts", label: "Accounts", icon: Wallet },
   { to: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { to: "/import", label: "Import SMS", icon: MessageSquareText },
+  { to: "/reports", label: "Reports", icon: BarChart3 },
 ];
 
 export const AppLayout = () => {

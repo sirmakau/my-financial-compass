@@ -2,25 +2,80 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+
+    <!-- Responsive Design -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- TODO: Set the document title to the name of your application -->
-    <title>Lovable App</title>
-    <meta name="description" content="Lovable Generated Project" />
-    <meta name="author" content="Lovable" />
 
-    <!-- TODO: Update og:title to match your application name -->
-    <meta property="og:title" content="Lovable App" />
-    <meta property="og:description" content="Lovable Generated Project" />
+    <!-- Primary Meta -->
+    <title>FinSight — Personal Finance Intelligence</title>
+    <meta
+      name="description"
+      content="Centralized financial dashboard to track, analyze, and optimize your money across M-Pesa, investments, debts, and receivables."
+    />
+    <meta name="author" content="FinSight" />
+
+    <!-- Theme -->
+    <meta name="theme-color" content="#0f172a" />
+
+    <!-- Open Graph (for sharing) -->
+    <meta property="og:title" content="FinSight — Financial Intelligence Dashboard" />
+    <meta
+      property="og:description"
+      content="Track your cash flow, investments, debt, and financial behavior with AI-powered insights."
+    />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta property="og:url" content="https://your-domain.com" />
+    <meta
+      property="og:image"
+      content="https://your-domain.com/og-image.png"
+    />
 
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@Lovable" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta name="twitter:title" content="FinSight — Financial Intelligence Dashboard" />
+    <meta
+      name="twitter:description"
+      content="Understand where your money goes and optimize your finances with AI insights."
+    />
+    <meta
+      name="twitter:image"
+      content="https://your-domain.com/og-image.png"
+    />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
+
+    <!-- Fonts (optional but recommended for UI clarity) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- App Styles -->
+    <style>
+      body {
+        margin: 0;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        background-color: #0f172a;
+        color: #e5e7eb;
+      }
+
+      #root {
+        min-height: 100vh;
+      }
+    </style>
   </head>
 
   <body>
+    <noscript>
+      This application requires JavaScript to run properly.
+    </noscript>
+
     <div id="root"></div>
+
+    <!-- React Entry -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

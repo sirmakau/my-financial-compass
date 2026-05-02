@@ -20,9 +20,11 @@ export type Database = {
           created_at: string
           currency: string
           id: string
+          interest_rate: number | null
           is_archived: boolean
           name: string
           notes: string | null
+          subtype: string | null
           type: Database["public"]["Enums"]["account_type"]
           updated_at: string
           user_id: string
@@ -32,9 +34,11 @@ export type Database = {
           created_at?: string
           currency?: string
           id?: string
+          interest_rate?: number | null
           is_archived?: boolean
           name: string
           notes?: string | null
+          subtype?: string | null
           type: Database["public"]["Enums"]["account_type"]
           updated_at?: string
           user_id: string
@@ -44,9 +48,11 @@ export type Database = {
           created_at?: string
           currency?: string
           id?: string
+          interest_rate?: number | null
           is_archived?: boolean
           name?: string
           notes?: string | null
+          subtype?: string | null
           type?: Database["public"]["Enums"]["account_type"]
           updated_at?: string
           user_id?: string

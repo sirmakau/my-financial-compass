@@ -60,7 +60,7 @@ export const useCreateAccount = () => {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async (input: { name: string; type: AccountType; balance?: number; notes?: string | null }) => {
+    mutationFn: async (input: { name: string; type: AccountType; balance?: number; interest_rate?: number | null; subtype?: string | null; notes?: string | null }) => {
       if (!user) throw new Error("Not authenticated");
       const { data, error } = await supabase
         .from("accounts")
@@ -69,6 +69,8 @@ export const useCreateAccount = () => {
           name: input.name,
           type: input.type,
           balance: input.balance ?? 0,
+          interest_rate: input.interest_rate ?? null,
+          subtype: input.subtype ?? null,
           notes: input.notes ?? null,
         })
         .select()
@@ -92,6 +94,39 @@ export const useDeleteAccount = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["accounts"] });
       qc.invalidateQueries({ queryKey: ["transactions"] });
+    },
+  });
+};
+
+export const useAccrueInterest = () => {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (accountId: string) => {
+      if (!user) throw new Error("Not authenticated");
+      const { data, error } = await supabase.rpc("accrue_interest_for_account", { p_account_id: accountId });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["accounts"] });
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+    },
+  });
+};
+
+export const useGenerateInsights = () => {
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not authenticated");
+      // For now, mock insights. In real, call AI gateway with data summary
+      const insights = [
+        "Your income has increased by 15% this month compared to last month.",
+        "Consider reviewing your entertainment expenses, which are 20% higher than average.",
+        "Your investment in MMF is performing well with accrued interest.",
+      ];
+      return insights;
     },
   });
 };

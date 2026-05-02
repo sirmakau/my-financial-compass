@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useAccounts, useCreateAccount, useDeleteAccount, type AccountType } from "@/hooks/useFinance";
+import { useAccounts, useCreateAccount, useDeleteAccount, useAccrueInterest, type AccountType } from "@/hooks/useFinance";
 import { formatKES } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,8 @@ const schema = z.object({
   name: z.string().trim().min(1, "Name required").max(80),
   type: z.enum(["cash", "investment", "debt", "receivable"]),
   balance: z.coerce.number().min(-1_000_000_000).max(1_000_000_000),
+  interest_rate: z.coerce.number().min(0).max(1).optional(),
+  subtype: z.string().trim().max(50).optional(),
   notes: z.string().trim().max(500).optional(),
 });
 
@@ -32,6 +34,7 @@ const Accounts = () => {
   const { data: accounts = [], isLoading } = useAccounts();
   const create = useCreateAccount();
   const del = useDeleteAccount();
+  const accrue = useAccrueInterest();
   const [open, setOpen] = useState(false);
 
   const form = useForm<FormValues>({
@@ -41,7 +44,14 @@ const Accounts = () => {
 
   const onSubmit = async (v: FormValues) => {
     try {
-      await create.mutateAsync({ name: v.name, type: v.type, balance: v.balance, notes: v.notes });
+      await create.mutateAsync({ 
+        name: v.name, 
+        type: v.type, 
+        balance: v.balance, 
+        interest_rate: v.interest_rate, 
+        subtype: v.subtype, 
+        notes: v.notes 
+      });
       toast.success("Account created");
       form.reset({ type: "cash", balance: 0 });
       setOpen(false);
@@ -86,6 +96,16 @@ const Accounts = () => {
                   <Input type="number" step="0.01" {...form.register("balance")} />
                 </div>
               </div>
+              {form.watch("type") === "investment" && (
+                <div className="space-y-1.5">
+                  <Label>Annual interest rate (%)</Label>
+                  <Input type="number" step="0.01" placeholder="e.g. 5.0" {...form.register("interest_rate")} />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label>Subtype (optional)</Label>
+                <Input placeholder="e.g. Fuliza, Ziidi" {...form.register("subtype")} />
+              </div>
               <div className="space-y-1.5">
                 <Label>Notes</Label>
                 <Textarea rows={2} {...form.register("notes")} />
@@ -124,17 +144,32 @@ const Accounts = () => {
                       <Badge variant="secondary" className="mt-1 capitalize">{a.type}</Badge>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost" size="icon"
-                    className="opacity-0 transition group-hover:opacity-100"
-                    onClick={async () => {
-                      if (!confirm(`Delete "${a.name}"? All transactions will be removed.`)) return;
-                      await del.mutateAsync(a.id);
-                      toast.success("Account deleted");
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4 text-muted-foreground" />
-                  </Button>
+                  <div className="flex gap-1">
+                    {a.type === "investment" && a.interest_rate && a.interest_rate > 0 && (
+                      <Button
+                        variant="ghost" size="icon"
+                        className="opacity-0 transition group-hover:opacity-100"
+                        onClick={async () => {
+                          await accrue.mutateAsync(a.id);
+                          toast.success("Interest accrued");
+                        }}
+                        disabled={accrue.isPending}
+                      >
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost" size="icon"
+                      className="opacity-0 transition group-hover:opacity-100"
+                      onClick={async () => {
+                        if (!confirm(`Delete "${a.name}"? All transactions will be removed.`)) return;
+                        await del.mutateAsync(a.id);
+                        toast.success("Account deleted");
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </div>
                 </div>
                 <div className={`mt-4 font-mono-figure text-2xl font-semibold ${a.type === "debt" ? "text-outflow" : ""}`}>
                   {formatKES(balance)}

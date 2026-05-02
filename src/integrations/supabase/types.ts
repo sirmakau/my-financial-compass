@@ -14,7 +14,174 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      accounts: {
+        Row: {
+          balance: number
+          created_at: string
+          currency: string
+          id: string
+          is_archived: boolean
+          name: string
+          notes: string | null
+          type: Database["public"]["Enums"]["account_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          is_archived?: boolean
+          name: string
+          notes?: string | null
+          type: Database["public"]["Enums"]["account_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          is_archived?: boolean
+          name?: string
+          notes?: string | null
+          type?: Database["public"]["Enums"]["account_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      audit_log: {
+        Row: {
+          action: string
+          created_at: string
+          id: number
+          new_row: Json | null
+          old_row: Json | null
+          row_id: string
+          table_name: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: number
+          new_row?: Json | null
+          old_row?: Json | null
+          row_id: string
+          table_name: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: number
+          new_row?: Json | null
+          old_row?: Json | null
+          row_id?: string
+          table_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      categories: {
+        Row: {
+          color: string | null
+          created_at: string
+          icon: string | null
+          id: string
+          kind: Database["public"]["Enums"]["category_kind"]
+          name: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["category_kind"]
+          name: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["category_kind"]
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          account_id: string
+          amount: number
+          category_id: string | null
+          counterparty: string | null
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json
+          mpesa_ref: string | null
+          occurred_at: string
+          raw_message: string | null
+          source: Database["public"]["Enums"]["txn_source"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          category_id?: string | null
+          counterparty?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json
+          mpesa_ref?: string | null
+          occurred_at?: string
+          raw_message?: string | null
+          source?: Database["public"]["Enums"]["txn_source"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          category_id?: string | null
+          counterparty?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json
+          mpesa_ref?: string | null
+          occurred_at?: string
+          raw_message?: string | null
+          source?: Database["public"]["Enums"]["txn_source"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +190,9 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      account_type: "cash" | "investment" | "debt" | "receivable"
+      category_kind: "income" | "expense" | "transfer"
+      txn_source: "manual" | "parsed" | "ai_assisted" | "import"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +319,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      account_type: ["cash", "investment", "debt", "receivable"],
+      category_kind: ["income", "expense", "transfer"],
+      txn_source: ["manual", "parsed", "ai_assisted", "import"],
+    },
   },
 } as const

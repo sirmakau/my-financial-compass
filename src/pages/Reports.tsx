@@ -21,6 +21,18 @@ const Reports = () => {
     });
   }, [accounts, txns]);
 
+  const agingBuckets = useMemo(() => {
+    const buckets: Record<'0-30' | '31-60' | '61-90' | '90+', number> = { '0-30': 0, '31-60': 0, '61-90': 0, '90+': 0 };
+    for (const r of receivables) {
+      if (r.balance <= 0) continue;
+      if (r.daysOutstanding <= 30) buckets['0-30'] += r.balance;
+      else if (r.daysOutstanding <= 60) buckets['31-60'] += r.balance;
+      else if (r.daysOutstanding <= 90) buckets['61-90'] += r.balance;
+      else buckets['90+'] += r.balance;
+    }
+    return buckets;
+  }, [receivables]);
+
   const handleGenerateInsights = async () => {
     const result = await generate.mutateAsync();
     setInsights(result);

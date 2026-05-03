@@ -22,6 +22,7 @@ export type Database = {
           id: string
           interest_rate: number | null
           is_archived: boolean
+          last_interest_accrued_at: string | null
           name: string
           notes: string | null
           subtype: string | null
@@ -36,6 +37,7 @@ export type Database = {
           id?: string
           interest_rate?: number | null
           is_archived?: boolean
+          last_interest_accrued_at?: string | null
           name: string
           notes?: string | null
           subtype?: string | null
@@ -50,6 +52,7 @@ export type Database = {
           id?: string
           interest_rate?: number | null
           is_archived?: boolean
+          last_interest_accrued_at?: string | null
           name?: string
           notes?: string | null
           subtype?: string | null
@@ -193,7 +196,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      accrue_interest_for_account: {
+        Args: { p_account_id: string }
+        Returns: number
+      }
     }
     Enums: {
       account_type: "cash" | "investment" | "debt" | "receivable"

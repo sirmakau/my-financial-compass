@@ -139,7 +139,8 @@ const Accounts = () => {
               </DialogFooter>
             </form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </header>
 
       {isLoading ? (

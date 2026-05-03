@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useAccounts, useCreateAccount, useDeleteAccount, useAccrueInterest, type AccountType } from "@/hooks/useFinance";
+import { useAccounts, useCreateAccount, useDeleteAccount, useAccrueInterest, useEnsureCategories, type AccountType } from "@/hooks/useFinance";
 import { formatKES } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Loader2, Wallet, TrendingUp, Landmark, HandCoins } from "lucide-react";
+import { Plus, Trash2, Loader2, Wallet, TrendingUp, Landmark, HandCoins, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 const ICONS: Record<AccountType, React.ComponentType<{ className?: string }>> = {
@@ -23,7 +23,8 @@ const schema = z.object({
   name: z.string().trim().min(1, "Name required").max(80),
   type: z.enum(["cash", "investment", "debt", "receivable"]),
   balance: z.coerce.number().min(-1_000_000_000).max(1_000_000_000),
-  interest_rate: z.coerce.number().min(0).max(1).optional(),
+  interest_rate: z.coerce.number().min(0).max(100).optional(),
+  credit_limit: z.coerce.number().min(0).max(1_000_000_000).optional(),
   subtype: z.string().trim().max(50).optional(),
   notes: z.string().trim().max(500).optional(),
 });
@@ -35,6 +36,7 @@ const Accounts = () => {
   const create = useCreateAccount();
   const del = useDeleteAccount();
   const accrue = useAccrueInterest();
+  const ensureCats = useEnsureCategories();
   const [open, setOpen] = useState(false);
 
   const form = useForm<FormValues>({
@@ -49,6 +51,7 @@ const Accounts = () => {
         type: v.type, 
         balance: v.balance, 
         interest_rate: v.interest_rate, 
+        credit_limit: v.credit_limit,
         subtype: v.subtype, 
         notes: v.notes 
       });
@@ -67,10 +70,22 @@ const Accounts = () => {
           <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">Accounts</h1>
           <p className="text-sm text-muted-foreground">Cash, investments, debt and receivables</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> New account</Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button
+            size="sm" variant="outline" className="gap-1.5"
+            disabled={ensureCats.isPending}
+            onClick={async () => {
+              const n = await ensureCats.mutateAsync();
+              toast.success(n > 0 ? `Added ${n} missing categor${n === 1 ? "y" : "ies"}` : "All categories present");
+            }}
+          >
+            {ensureCats.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+            Verify categories
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> New account</Button>
+            </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader><DialogTitle>New account</DialogTitle></DialogHeader>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
@@ -102,6 +117,12 @@ const Accounts = () => {
                   <Input type="number" step="0.01" placeholder="e.g. 5.0" {...form.register("interest_rate")} />
                 </div>
               )}
+              {form.watch("type") === "debt" && (
+                <div className="space-y-1.5">
+                  <Label>Credit limit (KES) — e.g. Fuliza max</Label>
+                  <Input type="number" step="1" placeholder="e.g. 600" {...form.register("credit_limit")} />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label>Subtype (optional)</Label>
                 <Input placeholder="e.g. Fuliza, Ziidi" {...form.register("subtype")} />
@@ -118,7 +139,8 @@ const Accounts = () => {
               </DialogFooter>
             </form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </header>
 
       {isLoading ? (

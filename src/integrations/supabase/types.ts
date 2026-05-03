@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           balance: number
           created_at: string
+          credit_limit: number | null
           currency: string
           id: string
           interest_rate: number | null
@@ -33,6 +34,7 @@ export type Database = {
         Insert: {
           balance?: number
           created_at?: string
+          credit_limit?: number | null
           currency?: string
           id?: string
           interest_rate?: number | null
@@ -48,6 +50,7 @@ export type Database = {
         Update: {
           balance?: number
           created_at?: string
+          credit_limit?: number | null
           currency?: string
           id?: string
           interest_rate?: number | null
@@ -200,6 +203,8 @@ export type Database = {
         Args: { p_account_id: string }
         Returns: number
       }
+      ensure_all_users_categories: { Args: never; Returns: number }
+      ensure_user_categories: { Args: { p_user_id?: string }; Returns: number }
     }
     Enums: {
       account_type: "cash" | "investment" | "debt" | "receivable"

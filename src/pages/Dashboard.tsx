@@ -26,6 +26,21 @@ const Dashboard = () => {
     return { by, netWorth };
   }, [accounts]);
 
+  const mpesa = useMemo(() => {
+    const isFuliza = (a: typeof accounts[number]) =>
+      /fuliza/i.test(a.name) || /fuliza/i.test(a.subtype ?? "");
+    const isMpesaCash = (a: typeof accounts[number]) =>
+      a.type === "cash" && (/m[-\s]?pesa/i.test(a.name) || /m[-\s]?pesa/i.test(a.subtype ?? ""));
+
+    const cash = accounts.filter(isMpesaCash).reduce((s, a) => s + Number(a.balance), 0);
+    const fulizaAcc = accounts.find((a) => a.type === "debt" && isFuliza(a));
+    const fulizaOwed = fulizaAcc ? Math.abs(Number(fulizaAcc.balance)) : 0;
+    const fulizaLimit = fulizaAcc ? Number(fulizaAcc.credit_limit ?? 0) : 0;
+    // Net available M-Pesa: positive cash, or negative when on Fuliza
+    const net = cash - fulizaOwed;
+    return { cash, fulizaOwed, fulizaLimit, net, hasFuliza: !!fulizaAcc };
+  }, [accounts]);
+
   const monthly = useMemo(() => {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -104,6 +119,44 @@ const Dashboard = () => {
           })}
         </div>
       </Card>
+
+      {/* M-Pesa available balance (net of Fuliza) */}
+      {(mpesa.cash > 0 || mpesa.hasFuliza) && (
+        <Card className="border-border/60 p-5">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">M-Pesa available</div>
+              <div className={`mt-1 font-mono-figure text-3xl font-semibold ${mpesa.net < 0 ? "text-outflow" : ""}`}>
+                {formatKES(mpesa.net, { signed: mpesa.net < 0 })}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {mpesa.net < 0
+                  ? `On Fuliza — ${formatKES(mpesa.fulizaOwed)} owed`
+                  : mpesa.hasFuliza
+                    ? "Fuliza fully paid"
+                    : `Cash: ${formatKES(mpesa.cash)}`}
+              </div>
+            </div>
+            {mpesa.hasFuliza && mpesa.fulizaLimit > 0 && (
+              <div className="min-w-[180px]">
+                <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                  <span>Fuliza used</span>
+                  <span className="font-mono-figure">{formatKES(mpesa.fulizaOwed)} / {formatKES(mpesa.fulizaLimit)}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full bg-outflow transition-all"
+                    style={{ width: `${Math.min(100, (mpesa.fulizaOwed / mpesa.fulizaLimit) * 100)}%` }}
+                  />
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {formatKES(Math.max(0, mpesa.fulizaLimit - mpesa.fulizaOwed))} available
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Month KPIs */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

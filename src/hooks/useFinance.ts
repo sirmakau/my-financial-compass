@@ -60,7 +60,7 @@ export const useCreateAccount = () => {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async (input: { name: string; type: AccountType; balance?: number; interest_rate?: number | null; subtype?: string | null; notes?: string | null }) => {
+    mutationFn: async (input: { name: string; type: AccountType; balance?: number; interest_rate?: number | null; subtype?: string | null; notes?: string | null; credit_limit?: number | null }) => {
       if (!user) throw new Error("Not authenticated");
       const { data, error } = await supabase
         .from("accounts")
@@ -72,6 +72,7 @@ export const useCreateAccount = () => {
           interest_rate: input.interest_rate ?? null,
           subtype: input.subtype ?? null,
           notes: input.notes ?? null,
+          credit_limit: input.credit_limit ?? null,
         })
         .select()
         .single();
@@ -111,6 +112,22 @@ export const useAccrueInterest = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["accounts"] });
       qc.invalidateQueries({ queryKey: ["transactions"] });
+    },
+  });
+};
+
+export const useEnsureCategories = () => {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not authenticated");
+      const { data, error } = await supabase.rpc("ensure_user_categories", { p_user_id: user.id });
+      if (error) throw error;
+      return data as number;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["categories"] });
     },
   });
 };

@@ -116,6 +116,22 @@ export const useAccrueInterest = () => {
   });
 };
 
+export const useEnsureCategories = () => {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not authenticated");
+      const { data, error } = await supabase.rpc("ensure_user_categories", { p_user_id: user.id });
+      if (error) throw error;
+      return data as number;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
+};
+
 export const useGenerateInsights = () => {
   const { user } = useAuth();
   return useMutation({

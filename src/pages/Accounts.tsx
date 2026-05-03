@@ -36,6 +36,7 @@ const Accounts = () => {
   const create = useCreateAccount();
   const del = useDeleteAccount();
   const accrue = useAccrueInterest();
+  const ensureCats = useEnsureCategories();
   const [open, setOpen] = useState(false);
 
   const form = useForm<FormValues>({

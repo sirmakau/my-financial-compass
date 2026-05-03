@@ -70,10 +70,22 @@ const Accounts = () => {
           <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">Accounts</h1>
           <p className="text-sm text-muted-foreground">Cash, investments, debt and receivables</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> New account</Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button
+            size="sm" variant="outline" className="gap-1.5"
+            disabled={ensureCats.isPending}
+            onClick={async () => {
+              const n = await ensureCats.mutateAsync();
+              toast.success(n > 0 ? `Added ${n} missing categor${n === 1 ? "y" : "ies"}` : "All categories present");
+            }}
+          >
+            {ensureCats.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+            Verify categories
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> New account</Button>
+            </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader><DialogTitle>New account</DialogTitle></DialogHeader>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">

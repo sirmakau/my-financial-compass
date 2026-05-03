@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useAccounts, useCreateAccount, useDeleteAccount, useAccrueInterest, type AccountType } from "@/hooks/useFinance";
+import { useAccounts, useCreateAccount, useDeleteAccount, useAccrueInterest, useEnsureCategories, type AccountType } from "@/hooks/useFinance";
 import { formatKES } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

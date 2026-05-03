@@ -26,6 +26,21 @@ const Dashboard = () => {
     return { by, netWorth };
   }, [accounts]);
 
+  const mpesa = useMemo(() => {
+    const isFuliza = (a: typeof accounts[number]) =>
+      /fuliza/i.test(a.name) || /fuliza/i.test(a.subtype ?? "");
+    const isMpesaCash = (a: typeof accounts[number]) =>
+      a.type === "cash" && (/m[-\s]?pesa/i.test(a.name) || /m[-\s]?pesa/i.test(a.subtype ?? ""));
+
+    const cash = accounts.filter(isMpesaCash).reduce((s, a) => s + Number(a.balance), 0);
+    const fulizaAcc = accounts.find((a) => a.type === "debt" && isFuliza(a));
+    const fulizaOwed = fulizaAcc ? Math.abs(Number(fulizaAcc.balance)) : 0;
+    const fulizaLimit = fulizaAcc ? Number(fulizaAcc.credit_limit ?? 0) : 0;
+    // Net available M-Pesa: positive cash, or negative when on Fuliza
+    const net = cash - fulizaOwed;
+    return { cash, fulizaOwed, fulizaLimit, net, hasFuliza: !!fulizaAcc };
+  }, [accounts]);
+
   const monthly = useMemo(() => {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1);

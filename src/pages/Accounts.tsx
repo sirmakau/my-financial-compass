@@ -51,6 +51,7 @@ const Accounts = () => {
         type: v.type, 
         balance: v.balance, 
         interest_rate: v.interest_rate, 
+        credit_limit: v.credit_limit,
         subtype: v.subtype, 
         notes: v.notes 
       });

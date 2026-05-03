@@ -117,6 +117,12 @@ const Accounts = () => {
                   <Input type="number" step="0.01" placeholder="e.g. 5.0" {...form.register("interest_rate")} />
                 </div>
               )}
+              {form.watch("type") === "debt" && (
+                <div className="space-y-1.5">
+                  <Label>Credit limit (KES) — e.g. Fuliza max</Label>
+                  <Input type="number" step="1" placeholder="e.g. 600" {...form.register("credit_limit")} />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label>Subtype (optional)</Label>
                 <Input placeholder="e.g. Fuliza, Ziidi" {...form.register("subtype")} />

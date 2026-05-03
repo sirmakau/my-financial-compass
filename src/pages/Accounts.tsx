@@ -23,7 +23,8 @@ const schema = z.object({
   name: z.string().trim().min(1, "Name required").max(80),
   type: z.enum(["cash", "investment", "debt", "receivable"]),
   balance: z.coerce.number().min(-1_000_000_000).max(1_000_000_000),
-  interest_rate: z.coerce.number().min(0).max(1).optional(),
+  interest_rate: z.coerce.number().min(0).max(100).optional(),
+  credit_limit: z.coerce.number().min(0).max(1_000_000_000).optional(),
   subtype: z.string().trim().max(50).optional(),
   notes: z.string().trim().max(500).optional(),
 });

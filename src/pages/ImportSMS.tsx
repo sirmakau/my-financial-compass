@@ -237,7 +237,12 @@ const ImportSMS = () => {
                     <td className="px-3 py-2">
                       <Input className="h-8 w-56 text-xs" value={r.description}
                         onChange={(e) => update(r._id, { description: e.target.value })} />
-                      {r.notes && <div className="mt-1 text-[10px] text-warning">{r.notes}</div>}
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        {r.target === "fuliza" && (
+                          <Badge variant="outline" className="text-[10px]">→ Fuliza</Badge>
+                        )}
+                        {r.notes && <span className="text-[10px] text-warning">{r.notes}</span>}
+                      </div>
                     </td>
                     <td className="px-3 py-2">
                       <Select value={r.category_id ?? ""} onValueChange={(v) => update(r._id, { category_id: v })}>

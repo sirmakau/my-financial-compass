@@ -6,7 +6,7 @@ const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 
 interface ParsedTxn {
   mpesa_ref: string | null;
-  type: "receive" | "send" | "paybill" | "buygoods" | "withdraw" | "deposit" | "airtime" | "fee" | "reversal" | "other";
+  type: "receive" | "send" | "paybill" | "buygoods" | "withdraw" | "deposit" | "airtime" | "fee" | "reversal" | "fuliza_borrow" | "fuliza_repay" | "other";
   amount: number;       // signed: positive = inflow, negative = outflow
   counterparty: string | null;
   occurred_at: string;  // ISO
@@ -14,6 +14,8 @@ interface ParsedTxn {
   suggested_category: string;
   raw_message: string;
   confidence: number;   // 0-1
+  target: "mpesa" | "fuliza"; // which account this txn should land in
+  fuliza_outstanding?: number | null; // total Fuliza outstanding reported in SMS, if any
   notes?: string;
 }
 

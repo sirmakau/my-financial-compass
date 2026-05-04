@@ -48,6 +48,10 @@ const ImportSMS = () => {
   const [rows, setRows] = useState<Row[]>([]);
 
   const mpesaAccounts = useMemo(() => accounts.filter((a) => a.type === "cash"), [accounts]);
+  const fulizaAccount = useMemo(
+    () => accounts.find((a) => a.type === "debt" && (/fuliza/i.test(a.name) || /fuliza/i.test(a.subtype ?? ""))),
+    [accounts],
+  );
 
   const findCategoryIdByName = (name: string): string | null => {
     const exact = cats.find((c) => c.name.toLowerCase() === name.toLowerCase());

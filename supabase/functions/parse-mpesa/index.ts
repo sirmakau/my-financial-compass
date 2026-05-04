@@ -6,7 +6,7 @@ const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 
 interface ParsedTxn {
   mpesa_ref: string | null;
-  type: "receive" | "send" | "paybill" | "buygoods" | "withdraw" | "deposit" | "airtime" | "fee" | "reversal" | "other";
+  type: "receive" | "send" | "paybill" | "buygoods" | "withdraw" | "deposit" | "airtime" | "fee" | "reversal" | "fuliza_borrow" | "fuliza_repay" | "other";
   amount: number;       // signed: positive = inflow, negative = outflow
   counterparty: string | null;
   occurred_at: string;  // ISO
@@ -14,6 +14,8 @@ interface ParsedTxn {
   suggested_category: string;
   raw_message: string;
   confidence: number;   // 0-1
+  target: "mpesa" | "fuliza"; // which account this txn should land in
+  fuliza_outstanding?: number | null; // total Fuliza outstanding reported in SMS, if any
   notes?: string;
 }
 
@@ -21,16 +23,33 @@ const SYSTEM = `You are an expert M-Pesa SMS parser for Kenyan personal finance.
 Given raw M-Pesa SMS messages, extract structured transactions.
 
 RULES:
-- One message may contain ONE transaction. Skip balance/promo/non-transactional messages by omitting them.
+- One SMS may produce ONE OR MORE transactions. Skip balance/promo/non-transactional messages by omitting them.
 - "amount" must be signed: money received is POSITIVE, money sent/paid/withdrawn/charged is NEGATIVE.
 - "mpesa_ref" is the M-Pesa confirmation code (e.g. "QGH7X8K9LM"). Null if absent.
-- "occurred_at" must be ISO 8601 with timezone +03:00 (Africa/Nairobi). If only date+time given, assume +03:00.
-- "counterparty" is the other party (sender, recipient, paybill business, till name). Null if not applicable.
+- "occurred_at" must be ISO 8601 with timezone +03:00 (Africa/Nairobi). If only date+time given, assume +03:00. If the SMS has no timestamp (e.g. Fuliza summary line), use the timestamp of the related transaction or now.
+- "counterparty" is the other party (sender, recipient, paybill business, till name, "Fuliza M-PESA", etc). Null if not applicable.
 - "suggested_category" must be one of the user's categories supplied in the user message. Pick the BEST fit. Use "Other" if unsure.
-- "type" classifies the M-Pesa action.
+  - Fuliza borrow/top-up → "Loan Repayment" is wrong; use "Fees & Charges" only for the access fee. The borrow itself has no expense category — set "Transfer".
+  - Fuliza repayment (auto-deducted from incoming M-Pesa) → "Transfer".
+  - Airtime purchases → "Airtime & Data".
+- "type" classifies the M-Pesa action. Use "fuliza_borrow" when M-Pesa tops up a shortfall via Fuliza, and "fuliza_repay" when an inflow auto-settles outstanding Fuliza.
+- "target" routes the transaction to an account: "mpesa" for normal cash-account moves; "fuliza" for changes to the Fuliza debt balance (borrow increases debt → NEGATIVE amount on the fuliza account; repay decreases debt → POSITIVE amount).
+- "fuliza_outstanding": if the SMS explicitly states a "Total Fuliza M-PESA outstanding amount", capture it as a positive number. Otherwise null.
 - "confidence" reflects parsing certainty (0-1).
-- "raw_message" must be the EXACT original SMS text for that transaction.
-- Be conservative — never invent amounts or counterparties. If unclear, lower confidence and add a "notes" field explaining ambiguity.`;
+- "raw_message" must be the EXACT original SMS text for that transaction (repeat it for each split row).
+- Be conservative — never invent amounts or counterparties. If unclear, lower confidence and add a "notes" field explaining ambiguity.
+
+FULIZA SPLITTING (IMPORTANT):
+A single SMS like:
+"UE4R52WC46 Confirmed. Fuliza M-PESA amount is Ksh 5.00. Access Fee charged Ksh 0.05. Total Fuliza M-PESA outstanding amount is Ksh554.03 ..."
+means M-Pesa borrowed Ksh 5.00 on the user's behalf to complete a payment, and charged a Ksh 0.05 access fee.
+Emit TWO rows (do NOT emit the underlying purchase — that comes in its own SMS):
+  1. type=fuliza_borrow, target=fuliza, amount=-5.00, suggested_category="Transfer", description="Fuliza borrow", fuliza_outstanding=554.03
+  2. type=fee,           target=fuliza, amount=-0.05, suggested_category="Fees & Charges", description="Fuliza access fee", fuliza_outstanding=554.03
+Both share the same mpesa_ref.
+
+For an inflow that auto-repays Fuliza (SMS mentions "X has been used to fully/partially pay your outstanding Fuliza"):
+Emit the receive on target=mpesa AND a positive fuliza_repay on target=fuliza for the amount applied.`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -72,7 +91,7 @@ Deno.serve(async (req) => {
                     type: "object",
                     properties: {
                       mpesa_ref: { type: ["string", "null"] },
-                      type: { type: "string", enum: ["receive","send","paybill","buygoods","withdraw","deposit","airtime","fee","reversal","other"] },
+                      type: { type: "string", enum: ["receive","send","paybill","buygoods","withdraw","deposit","airtime","fee","reversal","fuliza_borrow","fuliza_repay","other"] },
                       amount: { type: "number" },
                       counterparty: { type: ["string", "null"] },
                       occurred_at: { type: "string" },
@@ -80,9 +99,11 @@ Deno.serve(async (req) => {
                       suggested_category: { type: "string" },
                       raw_message: { type: "string" },
                       confidence: { type: "number" },
+                      target: { type: "string", enum: ["mpesa","fuliza"] },
+                      fuliza_outstanding: { type: ["number", "null"] },
                       notes: { type: "string" },
                     },
-                    required: ["mpesa_ref","type","amount","counterparty","occurred_at","description","suggested_category","raw_message","confidence"],
+                    required: ["mpesa_ref","type","amount","counterparty","occurred_at","description","suggested_category","raw_message","confidence","target"],
                     additionalProperties: false,
                   },
                 },

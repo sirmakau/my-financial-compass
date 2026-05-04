@@ -22,6 +22,8 @@ interface ParsedTxn {
   suggested_category: string;
   raw_message: string;
   confidence: number;
+  target?: "mpesa" | "fuliza";
+  fuliza_outstanding?: number | null;
   notes?: string;
 }
 
@@ -46,6 +48,10 @@ const ImportSMS = () => {
   const [rows, setRows] = useState<Row[]>([]);
 
   const mpesaAccounts = useMemo(() => accounts.filter((a) => a.type === "cash"), [accounts]);
+  const fulizaAccount = useMemo(
+    () => accounts.find((a) => a.type === "debt" && (/fuliza/i.test(a.name) || /fuliza/i.test(a.subtype ?? ""))),
+    [accounts],
+  );
 
   const findCategoryIdByName = (name: string): string | null => {
     const exact = cats.find((c) => c.name.toLowerCase() === name.toLowerCase());
@@ -105,16 +111,19 @@ const ImportSMS = () => {
     }
 
     try {
-      await batch.mutateAsync(selected.map((r) => ({
-        account_id: accountId,
-        category_id: r.category_id,
-        amount: r.amount,
-        occurred_at: r.occurred_at,
-        description: r.description,
-        counterparty: r.counterparty,
-        mpesa_ref: r.mpesa_ref,
-        raw_message: r.raw_message,
-      })));
+      await batch.mutateAsync(selected.map((r) => {
+        const useFuliza = r.target === "fuliza" && fulizaAccount;
+        return {
+          account_id: useFuliza ? fulizaAccount!.id : accountId,
+          category_id: r.category_id,
+          amount: r.amount,
+          occurred_at: r.occurred_at,
+          description: r.description,
+          counterparty: r.counterparty,
+          mpesa_ref: r.mpesa_ref,
+          raw_message: r.raw_message,
+        };
+      }));
       toast.success(`Imported ${selected.length} transaction${selected.length > 1 ? "s" : ""}`);
       setRows([]); setText("");
     } catch (e) {
@@ -179,11 +188,16 @@ const ImportSMS = () => {
 
       {rows.length > 0 && (
         <Card className="overflow-hidden border-border/60">
-          <div className="flex items-center justify-between border-b border-border/60 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 p-3">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-warning" />
               <span className="text-sm">Review parsed transactions before saving</span>
             </div>
+            {rows.some((r) => r.target === "fuliza") && !fulizaAccount && (
+              <span className="text-xs text-warning">
+                Fuliza rows detected but no Fuliza debt account exists — create one in Accounts to track them separately.
+              </span>
+            )}
             <Button size="sm" onClick={confirmAll} disabled={batch.isPending} className="gap-1.5">
               {batch.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Confirm & Save ({rows.filter((r) => r.include).length})
@@ -223,7 +237,12 @@ const ImportSMS = () => {
                     <td className="px-3 py-2">
                       <Input className="h-8 w-56 text-xs" value={r.description}
                         onChange={(e) => update(r._id, { description: e.target.value })} />
-                      {r.notes && <div className="mt-1 text-[10px] text-warning">{r.notes}</div>}
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        {r.target === "fuliza" && (
+                          <Badge variant="outline" className="text-[10px]">→ Fuliza</Badge>
+                        )}
+                        {r.notes && <span className="text-[10px] text-warning">{r.notes}</span>}
+                      </div>
                     </td>
                     <td className="px-3 py-2">
                       <Select value={r.category_id ?? ""} onValueChange={(v) => update(r._id, { category_id: v })}>

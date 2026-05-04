@@ -9,8 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Loader2, AlertCircle, Check, X } from "lucide-react";
+import { Sparkles, Loader2, AlertCircle, Check, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+
+// Tolerance (KES) for matching SMS "Total Fuliza outstanding" with our computed debt.
+const FULIZA_TOLERANCE = 1.0;
 
 interface ParsedTxn {
   mpesa_ref: string | null;
@@ -80,6 +83,7 @@ const ImportSMS = () => {
         category_id: findCategoryIdByName(p.suggested_category),
         include: true,
       })));
+      setFulizaAck(false);
       toast.success(`Parsed ${parsed.length} transaction${parsed.length > 1 ? "s" : ""}. Review below.`);
     } catch (e) {
       toast.error((e as Error).message);
@@ -91,6 +95,9 @@ const ImportSMS = () => {
   const confirmAll = async () => {
     let selected = rows.filter((r) => r.include);
     if (selected.length === 0) return toast.error("Nothing selected");
+    if (fulizaCheck?.mismatch && !fulizaAck) {
+      return toast.error("Fuliza outstanding mismatch — review and acknowledge before saving.");
+    }
 
     // Pre-check duplicates by mpesa_ref to keep imports idempotent across pages.
     const refs = selected.map((r) => r.mpesa_ref).filter((x): x is string => !!x);
@@ -138,6 +145,35 @@ const ImportSMS = () => {
 
   const update = (id: string, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r) => (r._id === id ? { ...r, ...patch } : r)));
+
+  // Reconcile SMS-reported "Total Fuliza outstanding" vs our computed debt.
+  // Computed outstanding = current debt + (borrows added) - (repays applied) for included rows.
+  // On the fuliza account, debt is stored as NEGATIVE balance, borrows are negative amounts,
+  // repays are positive amounts. So: outstanding = -(balance + sum(included fuliza amounts)).
+  const fulizaCheck = useMemo(() => {
+    const fulizaRows = rows.filter((r) => r.include && r.target === "fuliza");
+    if (fulizaRows.length === 0) return null;
+
+    // Latest reported outstanding from the SMS batch (use the max fuliza_outstanding present —
+    // multiple split rows from one SMS share the same value; multiple SMS use the latest by time).
+    const reportedRows = fulizaRows.filter((r) => typeof r.fuliza_outstanding === "number" && r.fuliza_outstanding !== null);
+    if (reportedRows.length === 0) return null;
+    const latest = [...reportedRows].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)).pop()!;
+    const reported = Number(latest.fuliza_outstanding);
+
+    const currentDebt = fulizaAccount ? -Number(fulizaAccount.balance ?? 0) : 0;
+    // Only count fuliza-target rows up to and including the latest reported SMS time.
+    const applied = fulizaRows
+      .filter((r) => r.occurred_at <= latest.occurred_at)
+      .reduce((s, r) => s + Number(r.amount), 0);
+    const computed = Math.max(0, currentDebt - applied); // -applied because borrows are negative
+    const diff = +(computed - reported).toFixed(2);
+    const mismatch = Math.abs(diff) > FULIZA_TOLERANCE;
+    return { reported, computed: +computed.toFixed(2), diff, mismatch, hasAccount: !!fulizaAccount };
+  }, [rows, fulizaAccount]);
+
+  const [fulizaAck, setFulizaAck] = useState(false);
+
 
   return (
     <div className="space-y-6">
@@ -198,11 +234,41 @@ const ImportSMS = () => {
                 Fuliza rows detected but no Fuliza debt account exists — create one in Accounts to track them separately.
               </span>
             )}
-            <Button size="sm" onClick={confirmAll} disabled={batch.isPending} className="gap-1.5">
+            <Button size="sm" onClick={confirmAll}
+              disabled={batch.isPending || (fulizaCheck?.mismatch && !fulizaAck)}
+              className="gap-1.5">
               {batch.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Confirm & Save ({rows.filter((r) => r.include).length})
             </Button>
           </div>
+
+          {fulizaCheck && (
+            <div className={`flex flex-wrap items-start gap-3 border-b border-border/60 p-3 text-xs ${
+              fulizaCheck.mismatch ? "bg-warning/10" : "bg-inflow/5"
+            }`}>
+              {fulizaCheck.mismatch
+                ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                : <Check className="mt-0.5 h-4 w-4 shrink-0 text-inflow" />}
+              <div className="flex-1 space-y-1">
+                <div className="font-medium">
+                  Fuliza reconciliation {fulizaCheck.mismatch ? "— mismatch detected" : "— matches SMS"}
+                </div>
+                <div className="text-muted-foreground">
+                  SMS reports outstanding <span className="font-mono-figure">{formatKES(fulizaCheck.reported)}</span>;
+                  {" "}computed from your data <span className="font-mono-figure">{formatKES(fulizaCheck.computed)}</span>
+                  {" "}(difference <span className="font-mono-figure">{formatKES(fulizaCheck.diff)}</span>).
+                  {!fulizaCheck.hasAccount && " No Fuliza debt account exists — create one in Accounts."}
+                  {fulizaCheck.mismatch && " Likely cause: a Fuliza-related SMS was missed, a prior import was reverted, or manual edits drifted the balance."}
+                </div>
+                {fulizaCheck.mismatch && (
+                  <label className="mt-1 flex items-center gap-2 text-foreground">
+                    <input type="checkbox" checked={fulizaAck} onChange={(e) => setFulizaAck(e.target.checked)} />
+                    I’ve reviewed and want to import anyway
+                  </label>
+                )}
+              </div>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-secondary/30 text-xs uppercase tracking-wider text-muted-foreground">

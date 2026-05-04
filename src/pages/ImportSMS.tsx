@@ -94,6 +94,9 @@ const ImportSMS = () => {
   const confirmAll = async () => {
     let selected = rows.filter((r) => r.include);
     if (selected.length === 0) return toast.error("Nothing selected");
+    if (fulizaCheck?.mismatch && !fulizaAck) {
+      return toast.error("Fuliza outstanding mismatch — review and acknowledge before saving.");
+    }
 
     // Pre-check duplicates by mpesa_ref to keep imports idempotent across pages.
     const refs = selected.map((r) => r.mpesa_ref).filter((x): x is string => !!x);

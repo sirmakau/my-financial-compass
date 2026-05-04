@@ -188,11 +188,16 @@ const ImportSMS = () => {
 
       {rows.length > 0 && (
         <Card className="overflow-hidden border-border/60">
-          <div className="flex items-center justify-between border-b border-border/60 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 p-3">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-warning" />
               <span className="text-sm">Review parsed transactions before saving</span>
             </div>
+            {rows.some((r) => r.target === "fuliza") && !fulizaAccount && (
+              <span className="text-xs text-warning">
+                Fuliza rows detected but no Fuliza debt account exists — create one in Accounts to track them separately.
+              </span>
+            )}
             <Button size="sm" onClick={confirmAll} disabled={batch.isPending} className="gap-1.5">
               {batch.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Confirm & Save ({rows.filter((r) => r.include).length})

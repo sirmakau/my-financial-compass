@@ -142,6 +142,35 @@ const ImportSMS = () => {
   const update = (id: string, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r) => (r._id === id ? { ...r, ...patch } : r)));
 
+  // Reconcile SMS-reported "Total Fuliza outstanding" vs our computed debt.
+  // Computed outstanding = current debt + (borrows added) - (repays applied) for included rows.
+  // On the fuliza account, debt is stored as NEGATIVE balance, borrows are negative amounts,
+  // repays are positive amounts. So: outstanding = -(balance + sum(included fuliza amounts)).
+  const fulizaCheck = useMemo(() => {
+    const fulizaRows = rows.filter((r) => r.include && r.target === "fuliza");
+    if (fulizaRows.length === 0) return null;
+
+    // Latest reported outstanding from the SMS batch (use the max fuliza_outstanding present —
+    // multiple split rows from one SMS share the same value; multiple SMS use the latest by time).
+    const reportedRows = fulizaRows.filter((r) => typeof r.fuliza_outstanding === "number" && r.fuliza_outstanding !== null);
+    if (reportedRows.length === 0) return null;
+    const latest = [...reportedRows].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)).pop()!;
+    const reported = Number(latest.fuliza_outstanding);
+
+    const currentDebt = fulizaAccount ? -Number(fulizaAccount.balance ?? 0) : 0;
+    // Only count fuliza-target rows up to and including the latest reported SMS time.
+    const applied = fulizaRows
+      .filter((r) => r.occurred_at <= latest.occurred_at)
+      .reduce((s, r) => s + Number(r.amount), 0);
+    const computed = Math.max(0, currentDebt - applied); // -applied because borrows are negative
+    const diff = +(computed - reported).toFixed(2);
+    const mismatch = Math.abs(diff) > FULIZA_TOLERANCE;
+    return { reported, computed: +computed.toFixed(2), diff, mismatch, hasAccount: !!fulizaAccount };
+  }, [rows, fulizaAccount]);
+
+  const [fulizaAck, setFulizaAck] = useState(false);
+
+
   return (
     <div className="space-y-6">
       <header>

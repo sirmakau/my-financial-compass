@@ -83,6 +83,7 @@ const ImportSMS = () => {
         category_id: findCategoryIdByName(p.suggested_category),
         include: true,
       })));
+      setFulizaAck(false);
       toast.success(`Parsed ${parsed.length} transaction${parsed.length > 1 ? "s" : ""}. Review below.`);
     } catch (e) {
       toast.error((e as Error).message);

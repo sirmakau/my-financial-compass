@@ -83,8 +83,27 @@ const ImportSMS = () => {
   };
 
   const confirmAll = async () => {
-    const selected = rows.filter((r) => r.include);
+    let selected = rows.filter((r) => r.include);
     if (selected.length === 0) return toast.error("Nothing selected");
+
+    // Pre-check duplicates by mpesa_ref to keep imports idempotent across pages.
+    const refs = selected.map((r) => r.mpesa_ref).filter((x): x is string => !!x);
+    if (refs.length > 0) {
+      const { data: existing, error: dupErr } = await supabase
+        .from("transactions")
+        .select("mpesa_ref")
+        .in("mpesa_ref", refs);
+      if (dupErr) return toast.error(dupErr.message);
+      const dupSet = new Set((existing ?? []).map((e) => e.mpesa_ref));
+      const skipped = selected.filter((r) => r.mpesa_ref && dupSet.has(r.mpesa_ref));
+      if (skipped.length > 0) {
+        selected = selected.filter((r) => !r.mpesa_ref || !dupSet.has(r.mpesa_ref));
+        toast.warning(`Skipped ${skipped.length} duplicate${skipped.length > 1 ? "s" : ""} already imported.`);
+        setRows((rs) => rs.map((r) => (r.mpesa_ref && dupSet.has(r.mpesa_ref) ? { ...r, include: false } : r)));
+      }
+      if (selected.length === 0) return;
+    }
+
     try {
       await batch.mutateAsync(selected.map((r) => ({
         account_id: accountId,

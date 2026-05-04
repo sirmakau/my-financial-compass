@@ -112,6 +112,7 @@ export const useAccrueInterest = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["accounts"] });
       qc.invalidateQueries({ queryKey: ["transactions"] });
+      qc.invalidateQueries({ queryKey: ["categories"] });
     },
   });
 };

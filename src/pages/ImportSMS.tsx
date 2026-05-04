@@ -234,11 +234,41 @@ const ImportSMS = () => {
                 Fuliza rows detected but no Fuliza debt account exists — create one in Accounts to track them separately.
               </span>
             )}
-            <Button size="sm" onClick={confirmAll} disabled={batch.isPending} className="gap-1.5">
+            <Button size="sm" onClick={confirmAll}
+              disabled={batch.isPending || (fulizaCheck?.mismatch && !fulizaAck)}
+              className="gap-1.5">
               {batch.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Confirm & Save ({rows.filter((r) => r.include).length})
             </Button>
           </div>
+
+          {fulizaCheck && (
+            <div className={`flex flex-wrap items-start gap-3 border-b border-border/60 p-3 text-xs ${
+              fulizaCheck.mismatch ? "bg-warning/10" : "bg-inflow/5"
+            }`}>
+              {fulizaCheck.mismatch
+                ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                : <Check className="mt-0.5 h-4 w-4 shrink-0 text-inflow" />}
+              <div className="flex-1 space-y-1">
+                <div className="font-medium">
+                  Fuliza reconciliation {fulizaCheck.mismatch ? "— mismatch detected" : "— matches SMS"}
+                </div>
+                <div className="text-muted-foreground">
+                  SMS reports outstanding <span className="font-mono-figure">{formatKES(fulizaCheck.reported)}</span>;
+                  {" "}computed from your data <span className="font-mono-figure">{formatKES(fulizaCheck.computed)}</span>
+                  {" "}(difference <span className="font-mono-figure">{formatKES(fulizaCheck.diff)}</span>).
+                  {!fulizaCheck.hasAccount && " No Fuliza debt account exists — create one in Accounts."}
+                  {fulizaCheck.mismatch && " Likely cause: a Fuliza-related SMS was missed, a prior import was reverted, or manual edits drifted the balance."}
+                </div>
+                {fulizaCheck.mismatch && (
+                  <label className="mt-1 flex items-center gap-2 text-foreground">
+                    <input type="checkbox" checked={fulizaAck} onChange={(e) => setFulizaAck(e.target.checked)} />
+                    I’ve reviewed and want to import anyway
+                  </label>
+                )}
+              </div>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-secondary/30 text-xs uppercase tracking-wider text-muted-foreground">

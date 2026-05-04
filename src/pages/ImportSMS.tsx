@@ -22,6 +22,8 @@ interface ParsedTxn {
   suggested_category: string;
   raw_message: string;
   confidence: number;
+  target?: "mpesa" | "fuliza";
+  fuliza_outstanding?: number | null;
   notes?: string;
 }
 

@@ -49,6 +49,8 @@ const ImportSMS = () => {
   const [accountId, setAccountId] = useState<string>("");
   const [parsing, setParsing] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
 
   const mpesaAccounts = useMemo(() => accounts.filter((a) => a.type === "cash"), [accounts]);
   const fulizaAccount = useMemo(
@@ -72,8 +74,10 @@ const ImportSMS = () => {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       const parsed: ParsedTxn[] = data?.transactions ?? [];
+      setWarnings(Array.isArray(data?.warnings) ? data.warnings : []);
+      setErrors(Array.isArray(data?.errors) ? data.errors : []);
       if (parsed.length === 0) {
-        toast.warning("No transactions found");
+        toast.warning("No valid transactions parsed");
         setRows([]);
         return;
       }
@@ -221,6 +225,31 @@ const ImportSMS = () => {
           </div>
         </div>
       </Card>
+
+      {(errors.length > 0 || warnings.length > 0) && (
+        <Card className="space-y-2 border-border/60 p-3 text-xs">
+          {errors.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 font-medium text-destructive">
+                <AlertCircle className="h-4 w-4" /> {errors.length} row{errors.length > 1 ? "s" : ""} rejected
+              </div>
+              <ul className="ml-6 list-disc text-muted-foreground">
+                {errors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            </div>
+          )}
+          {warnings.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 font-medium text-warning">
+                <AlertTriangle className="h-4 w-4" /> {warnings.length} warning{warnings.length > 1 ? "s" : ""}
+              </div>
+              <ul className="ml-6 list-disc text-muted-foreground">
+                {warnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            </div>
+          )}
+        </Card>
+      )}
 
       {rows.length > 0 && (
         <Card className="overflow-hidden border-border/60">

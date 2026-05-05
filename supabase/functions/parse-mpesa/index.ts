@@ -1,4 +1,5 @@
 // Parses raw M-Pesa SMS messages into structured transactions using Lovable AI.
+// Enforces strict accounting rules (sign convention, double-entry for Fuliza, validation).
 // Returns suggested transactions WITHOUT inserting them — the client confirms first.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.105.1/cors";
 
@@ -9,47 +10,75 @@ interface ParsedTxn {
   type: "receive" | "send" | "paybill" | "buygoods" | "withdraw" | "deposit" | "airtime" | "fee" | "reversal" | "fuliza_borrow" | "fuliza_repay" | "other";
   amount: number;       // signed: positive = inflow, negative = outflow
   counterparty: string | null;
-  occurred_at: string;  // ISO
+  occurred_at: string;  // ISO 8601 with +03:00
   description: string;
   suggested_category: string;
   raw_message: string;
   confidence: number;   // 0-1
-  target: "mpesa" | "fuliza"; // which account this txn should land in
-  fuliza_outstanding?: number | null; // total Fuliza outstanding reported in SMS, if any
+  target: "mpesa" | "fuliza";
+  fuliza_outstanding?: number | null;
   notes?: string;
 }
 
-const SYSTEM = `You are an expert M-Pesa SMS parser for Kenyan personal finance.
-Given raw M-Pesa SMS messages, extract structured transactions.
+interface ParseResult {
+  transactions: ParsedTxn[];
+  warnings: string[];
+  errors: string[];
+}
 
-RULES:
-- One SMS may produce ONE OR MORE transactions. Skip balance/promo/non-transactional messages by omitting them.
-- "amount" must be signed: money received is POSITIVE, money sent/paid/withdrawn/charged is NEGATIVE.
-- "mpesa_ref" is the M-Pesa confirmation code (e.g. "QGH7X8K9LM"). Null if absent.
-- "occurred_at" must be ISO 8601 with timezone +03:00 (Africa/Nairobi). If only date+time given, assume +03:00. If the SMS has no timestamp (e.g. Fuliza summary line), use the timestamp of the related transaction or now.
-- "counterparty" is the other party (sender, recipient, paybill business, till name, "Fuliza M-PESA", etc). Null if not applicable.
-- "suggested_category" must be one of the user's categories supplied in the user message. Pick the BEST fit. Use "Other" if unsure.
-  - Fuliza borrow/top-up → "Loan Repayment" is wrong; use "Fees & Charges" only for the access fee. The borrow itself has no expense category — set "Transfer".
-  - Fuliza repayment (auto-deducted from incoming M-Pesa) → "Transfer".
-  - Airtime purchases → "Airtime & Data".
-- "type" classifies the M-Pesa action. Use "fuliza_borrow" when M-Pesa tops up a shortfall via Fuliza, and "fuliza_repay" when an inflow auto-settles outstanding Fuliza.
-- "target" routes the transaction to an account: "mpesa" for normal cash-account moves; "fuliza" for changes to the Fuliza debt balance (borrow increases debt → NEGATIVE amount on the fuliza account; repay decreases debt → POSITIVE amount).
-- "fuliza_outstanding": if the SMS explicitly states a "Total Fuliza M-PESA outstanding amount", capture it as a positive number. Otherwise null.
-- "confidence" reflects parsing certainty (0-1).
-- "raw_message" must be the EXACT original SMS text for that transaction (repeat it for each split row).
-- Be conservative — never invent amounts or counterparties. If unclear, lower confidence and add a "notes" field explaining ambiguity.
+const SYSTEM = `You are a strict M-Pesa SMS parser and validator for Kenyan personal finance.
 
-FULIZA SPLITTING (IMPORTANT):
-A single SMS like:
-"UE4R52WC46 Confirmed. Fuliza M-PESA amount is Ksh 5.00. Access Fee charged Ksh 0.05. Total Fuliza M-PESA outstanding amount is Ksh554.03 ..."
-means M-Pesa borrowed Ksh 5.00 on the user's behalf to complete a payment, and charged a Ksh 0.05 access fee.
-Emit TWO rows (do NOT emit the underlying purchase — that comes in its own SMS):
-  1. type=fuliza_borrow, target=fuliza, amount=-5.00, suggested_category="Transfer", description="Fuliza borrow", fuliza_outstanding=554.03
-  2. type=fee,           target=fuliza, amount=-0.05, suggested_category="Fees & Charges", description="Fuliza access fee", fuliza_outstanding=554.03
-Both share the same mpesa_ref.
+NON-NEGOTIABLE ACCOUNTING RULES:
+1. SIGN CONVENTION
+   - Inflow (money in)  → POSITIVE amount
+   - Outflow (money out) → NEGATIVE amount
+   - Send / paybill / buygoods / withdrawal / airtime / fee → NEGATIVE
+   - Receive / deposit / reversal-credit → POSITIVE
 
-For an inflow that auto-repays Fuliza (SMS mentions "X has been used to fully/partially pay your outstanding Fuliza"):
-Emit the receive on target=mpesa AND a positive fuliza_repay on target=fuliza for the amount applied.`;
+2. FULIZA = DEBT ACCOUNT (NOT CASH). Always use DOUBLE-ENTRY:
+   - When Fuliza tops up a payment shortfall: emit BOTH
+       a) the M-Pesa cash leg on target=mpesa with NEGATIVE amount (outflow on cash) — but ONLY if the SMS itself is the underlying purchase. If the SMS is the standalone Fuliza notification, do NOT invent the underlying purchase; the user imports it from its own SMS.
+       b) the Fuliza debt leg on target=fuliza with NEGATIVE amount (debt grows). type=fuliza_borrow.
+       c) any access fee as a SEPARATE row: target=fuliza, type=fee, NEGATIVE amount, suggested_category="Fees & Charges", description="Fuliza access fee".
+   - When an inflow auto-repays Fuliza (SMS says "X has been used to fully/partially pay your outstanding Fuliza"): emit BOTH
+       a) the receive on target=mpesa, POSITIVE amount.
+       b) a fuliza_repay on target=fuliza, POSITIVE amount equal to the portion applied (debt shrinks).
+   - NEVER emit only one side of a Fuliza event. If the SMS is ambiguous about the cash leg, add a warning rather than inventing.
+
+3. FEES are ALWAYS SEPARATE rows with suggested_category="Fees & Charges" and NEGATIVE amount. Do not bundle a fee into the principal transaction.
+
+EXTRACTION REQUIREMENTS (per row):
+- mpesa_ref: M-Pesa confirmation code (e.g. "QGH7X8K9LM"). REQUIRED — if missing, omit the row and add an error.
+- occurred_at: ISO 8601 with +03:00 (Africa/Nairobi). If date is ambiguous (no year, unparseable), omit the row and add an error "Ambiguous date: <snippet>".
+- type: one of receive|send|paybill|buygoods|withdraw|deposit|airtime|fee|reversal|fuliza_borrow|fuliza_repay|other. If unknowable, omit and add an error.
+- amount: signed number, never zero. If missing, omit and add an error.
+- counterparty: other party name; null if not applicable. If unclear, set null and add a warning.
+- target: "mpesa" or "fuliza" per rules above.
+- fuliza_outstanding: capture the "Total Fuliza M-PESA outstanding amount" if explicitly present (positive number); else null.
+- suggested_category: pick the BEST fit from the user-supplied category list. Use "Other" if unsure. Specific mappings:
+    supermarket/shop/food → "Food & Groceries" (or closest available)
+    uber/bolt/boda/matatu/fare → "Transport"
+    paybill utility (KPLC, water, internet, DSTV) → "Utilities" or "Bills"
+    salary/payroll/received from employer → "Income"/"Salary"
+    fuliza fee / access fee / transaction cost → "Fees & Charges"
+    airtime/data bundle → "Airtime & Data"
+- confidence: 0–1. Clear structured SMS >0.9; partial 0.6–0.8; guessing <0.5.
+- raw_message: EXACT original SMS text for that row (repeat for split rows).
+- notes: short string explaining ambiguity, when relevant.
+
+WARNING CONDITIONS (push string to "warnings"):
+- Fuliza implied but cash leg not explicit
+- Counterparty unclear
+- suggested_category confidence < 0.7
+- Same mpesa_ref appears more than once across the input (possible duplicate SMS pasted twice)
+
+ERROR CONDITIONS (push string to "errors", row OMITTED):
+- Amount missing or zero
+- mpesa_ref missing
+- Date invalid/ambiguous
+- Transaction type unknown
+
+Output via the emit_transactions tool only. Never invent values. Be conservative.`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -81,7 +110,7 @@ Deno.serve(async (req) => {
           type: "function",
           function: {
             name: "emit_transactions",
-            description: "Emit the parsed M-Pesa transactions",
+            description: "Emit parsed M-Pesa transactions plus any warnings and errors.",
             parameters: {
               type: "object",
               properties: {
@@ -107,8 +136,10 @@ Deno.serve(async (req) => {
                     additionalProperties: false,
                   },
                 },
+                warnings: { type: "array", items: { type: "string" } },
+                errors: { type: "array", items: { type: "string" } },
               },
-              required: ["transactions"],
+              required: ["transactions","warnings","errors"],
               additionalProperties: false,
             },
           },
@@ -126,11 +157,52 @@ Deno.serve(async (req) => {
 
     const data = await aiRes.json();
     const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) return json({ transactions: [] satisfies ParsedTxn[] });
+    if (!toolCall) return json({ transactions: [], warnings: [], errors: [] } satisfies ParseResult);
     const args = JSON.parse(toolCall.function.arguments ?? "{}");
-    const transactions: ParsedTxn[] = Array.isArray(args.transactions) ? args.transactions : [];
+    let transactions: ParsedTxn[] = Array.isArray(args.transactions) ? args.transactions : [];
+    const warnings: string[] = Array.isArray(args.warnings) ? args.warnings : [];
+    const errors: string[] = Array.isArray(args.errors) ? args.errors : [];
 
-    return json({ transactions });
+    // ---------- Server-side validation pass (defence in depth) ----------
+    const cleaned: ParsedTxn[] = [];
+    const refCounts = new Map<string, number>();
+    for (const t of transactions) {
+      if (!t || typeof t !== "object") continue;
+      if (!t.mpesa_ref) { errors.push(`Row dropped: missing mpesa_ref (${t.description ?? "?"})`); continue; }
+      if (!t.amount || Number.isNaN(Number(t.amount))) { errors.push(`Row dropped: invalid amount for ${t.mpesa_ref}`); continue; }
+      const d = new Date(t.occurred_at);
+      if (Number.isNaN(d.getTime())) { errors.push(`Row dropped: invalid date for ${t.mpesa_ref}`); continue; }
+      // Sign-convention guard: outflow types must be negative; inflow types positive.
+      const outflow = ["send","paybill","buygoods","withdraw","airtime","fee","fuliza_borrow"];
+      const inflow = ["receive","deposit","fuliza_repay"];
+      if (outflow.includes(t.type) && Number(t.amount) > 0) t.amount = -Math.abs(Number(t.amount));
+      if (inflow.includes(t.type) && Number(t.amount) < 0) t.amount = Math.abs(Number(t.amount));
+      // Fuliza-target rule: borrow→negative, repay→positive on the fuliza account.
+      if (t.target === "fuliza") {
+        if (t.type === "fuliza_borrow" && Number(t.amount) > 0) t.amount = -Math.abs(Number(t.amount));
+        if (t.type === "fuliza_repay" && Number(t.amount) < 0) t.amount = Math.abs(Number(t.amount));
+      }
+      refCounts.set(t.mpesa_ref, (refCounts.get(t.mpesa_ref) ?? 0) + 1);
+      cleaned.push(t);
+    }
+    // Double-entry sanity for Fuliza: every fuliza_borrow/repay event should pair with a cash leg
+    // sharing the same mpesa_ref OR be a standalone Fuliza notification (no underlying purchase in this batch).
+    // We only warn (not error) because the underlying purchase often arrives in a separate SMS.
+    for (const t of cleaned) {
+      if (t.target === "fuliza" && (t.type === "fuliza_borrow" || t.type === "fuliza_repay")) {
+        const sameRef = cleaned.filter((x) => x.mpesa_ref === t.mpesa_ref);
+        const hasCashLeg = sameRef.some((x) => x.target === "mpesa");
+        if (!hasCashLeg) warnings.push(`Fuliza ${t.type} ${t.mpesa_ref}: no matching M-Pesa cash leg in this batch (import the underlying SMS too).`);
+      }
+    }
+    // Duplicate-ref-in-batch warning (excluding intentional splits where target differs).
+    for (const [ref, count] of refCounts) {
+      const sameRef = cleaned.filter((x) => x.mpesa_ref === ref);
+      const targets = new Set(sameRef.map((x) => `${x.target}:${x.type}`));
+      if (count > targets.size) warnings.push(`Duplicate row(s) for ref ${ref} in this batch — review before saving.`);
+    }
+
+    return json({ transactions: cleaned, warnings, errors } satisfies ParseResult);
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }

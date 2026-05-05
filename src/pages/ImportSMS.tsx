@@ -49,6 +49,8 @@ const ImportSMS = () => {
   const [accountId, setAccountId] = useState<string>("");
   const [parsing, setParsing] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
 
   const mpesaAccounts = useMemo(() => accounts.filter((a) => a.type === "cash"), [accounts]);
   const fulizaAccount = useMemo(

@@ -74,8 +74,10 @@ const ImportSMS = () => {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       const parsed: ParsedTxn[] = data?.transactions ?? [];
+      setWarnings(Array.isArray(data?.warnings) ? data.warnings : []);
+      setErrors(Array.isArray(data?.errors) ? data.errors : []);
       if (parsed.length === 0) {
-        toast.warning("No transactions found");
+        toast.warning("No valid transactions parsed");
         setRows([]);
         return;
       }

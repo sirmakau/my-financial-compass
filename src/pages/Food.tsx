@@ -60,7 +60,7 @@ const Food = () => {
   }, [ensureSeed]);
 
   const cashBalance = useMemo(
-    () => accounts.filter((a) => a.type === "cash" || a.type === "mpesa").reduce((s, a) => s + Number(a.balance ?? 0), 0),
+    () => accounts.filter((a) => a.type === "cash").reduce((s, a) => s + Number(a.balance ?? 0), 0),
     [accounts],
   );
 

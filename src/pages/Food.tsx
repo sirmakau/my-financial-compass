@@ -96,7 +96,7 @@ const Food = () => {
 
   const [pending, setPending] = useState<MealCombo | null>(null);
   const defaultAccount = useMemo(() => {
-    return accounts.find((a) => a.type === "mpesa") ?? accounts.find((a) => a.type === "cash") ?? accounts[0];
+    return accounts.find((a) => a.type === "cash" && /m-?pesa/i.test(a.name)) ?? accounts.find((a) => a.type === "cash") ?? accounts[0];
   }, [accounts]);
   const [selectedAccount, setSelectedAccount] = useState<string>("");
   useEffect(() => {

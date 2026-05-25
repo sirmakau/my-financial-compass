@@ -128,6 +128,72 @@ export type Database = {
         }
         Relationships: []
       }
+      foods: {
+        Row: {
+          actual_cost: number
+          created_at: string
+          id: string
+          is_home_cooked: boolean
+          name: string
+          typical_qty: string | null
+          unit_price: number
+          user_id: string
+        }
+        Insert: {
+          actual_cost?: number
+          created_at?: string
+          id?: string
+          is_home_cooked?: boolean
+          name: string
+          typical_qty?: string | null
+          unit_price?: number
+          user_id: string
+        }
+        Update: {
+          actual_cost?: number
+          created_at?: string
+          id?: string
+          is_home_cooked?: boolean
+          name?: string
+          typical_qty?: string | null
+          unit_price?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      meal_combos: {
+        Row: {
+          category: string
+          cost: number
+          created_at: string
+          id: string
+          items: Json
+          meal_type: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          cost?: number
+          created_at?: string
+          id?: string
+          items?: Json
+          meal_type: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          cost?: number
+          created_at?: string
+          id?: string
+          items?: Json
+          meal_type?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           account_id: string
@@ -204,6 +270,7 @@ export type Database = {
         Returns: number
       }
       ensure_all_users_categories: { Args: never; Returns: number }
+      ensure_food_seed: { Args: { p_user_id?: string }; Returns: number }
       ensure_user_categories: { Args: { p_user_id?: string }; Returns: number }
     }
     Enums: {

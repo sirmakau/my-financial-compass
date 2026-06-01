@@ -39,11 +39,11 @@ const helbLabel: Record<HelbMode, { label: string; tone: string; quip: string }>
   critical: { label: "Critical Condition", tone: "bg-red-500/15 text-red-400 border-red-500/30", quip: "Tea + mandazi survival mode." },
 };
 
-const MEALS: { type: MealType; label: string; share: number }[] = [
-  { type: "breakfast", label: "Breakfast", share: 0.25 },
-  { type: "lunch", label: "Lunch", share: 0.4 },
-  { type: "supper", label: "Supper", share: 0.35 },
-];
+const MEAL_LABEL: Record<MealType, string> = {
+  breakfast: "Breakfast",
+  lunch: "Lunch",
+  supper: "Supper",
+};
 
 const Food = () => {
   const { data: accounts = [] } = useAccounts();
@@ -59,34 +59,45 @@ const Food = () => {
     }
   }, [ensureSeed]);
 
-  const cashBalance = useMemo(
-    () => accounts.filter((a) => a.type === "cash").reduce((s, a) => s + Number(a.balance ?? 0), 0),
+  // HELB mode source: M-Pesa + KCB by name match (case-insensitive)
+  const helbBalance = useMemo(
+    () =>
+      accounts
+        .filter((a) => /m-?pesa|kcb/i.test(a.name))
+        .reduce((s, a) => s + Number(a.balance ?? 0), 0),
     [accounts],
   );
 
-  const [budget, setBudget] = useState<number>(0);
-  useEffect(() => {
-    setBudget(Math.max(0, Math.round(cashBalance)));
-  }, [cashBalance]);
-
-  const mode = helbFrom(cashBalance);
-  const modeMeta = helbLabel[mode];
-
-  const [shuffleKeys, setShuffleKeys] = useState<Record<MealType, number>>({ breakfast: 0, lunch: 0, supper: 0 });
+  const [budget, setBudget] = useState<number>(300);
+  const [shuffleSeed, setShuffleSeed] = useState(0);
   const [activeCat, setActiveCat] = useState<ComboCategory | "all">("all");
+
+  const mode = helbFrom(helbBalance);
+  const modeMeta = helbLabel[mode];
 
   const filteredByMode = useMemo(() => {
     if (mode === "critical") return combos.filter((c) => c.category === "survival");
     return combos;
   }, [combos, mode]);
 
-  const pickFor = (type: MealType): MealCombo[] => {
-    const slot = budget * (MEALS.find((m) => m.type === type)?.share ?? 0.33);
-    const pool = filteredByMode.filter((c) => c.meal_type === type && c.cost <= slot);
-    void shuffleKeys[type];
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    return shuffled.sort((a, b) => b.cost - a.cost).slice(0, 3);
-  };
+  // Affordable combos within the user-set limit
+  const affordable = useMemo(() => {
+    return filteredByMode.filter((c) => c.cost <= budget);
+  }, [filteredByMode, budget]);
+
+  // Group affordable combos by meal_type for plan view; shuffle on demand
+  const grouped = useMemo(() => {
+    void shuffleSeed; // re-compute when shuffled
+    const g: Record<MealType, MealCombo[]> = { breakfast: [], lunch: [], supper: [] };
+    const shuffled = [...affordable].sort(() => Math.random() - 0.5);
+    for (const c of shuffled) g[c.meal_type].push(c);
+    return g;
+  }, [affordable, shuffleSeed]);
+
+  const cheapestCost = useMemo(
+    () => (filteredByMode.length ? Math.min(...filteredByMode.map((c) => c.cost)) : 0),
+    [filteredByMode],
+  );
 
   const browseList = useMemo(() => {
     return combos
@@ -96,14 +107,19 @@ const Food = () => {
 
   const [pending, setPending] = useState<MealCombo | null>(null);
   const defaultAccount = useMemo(() => {
-    return accounts.find((a) => a.type === "cash" && /m-?pesa/i.test(a.name)) ?? accounts.find((a) => a.type === "cash") ?? accounts[0];
+    return (
+      accounts.find((a) => /m-?pesa/i.test(a.name)) ??
+      accounts.find((a) => a.type === "cash") ??
+      accounts[0]
+    );
   }, [accounts]);
   const [selectedAccount, setSelectedAccount] = useState<string>("");
   useEffect(() => {
     if (defaultAccount && !selectedAccount) setSelectedAccount(defaultAccount.id);
   }, [defaultAccount, selectedAccount]);
 
-  const totalPickedHint = "Pick a combo, then confirm to log it as an expense.";
+  const showSlots = budget >= 250; // enough for at least three light meals
+  const meals: MealType[] = ["breakfast", "lunch", "supper"];
 
   return (
     <div className="space-y-6">
@@ -127,15 +143,17 @@ const Food = () => {
               <CardDescription>{modeMeta.quip}</CardDescription>
             </div>
             <div className="text-right">
-              <div className="text-xs text-muted-foreground">Cash + M-Pesa balance</div>
-              <div className="font-display text-xl font-semibold">{KES(cashBalance)}</div>
+              <div className="text-xs text-muted-foreground">M-Pesa + KCB balance</div>
+              <div className="font-display text-xl font-semibold">{KES(helbBalance)}</div>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[180px]">
-              <Label htmlFor="budget" className="text-xs text-muted-foreground">Daily food budget (KES)</Label>
+            <div className="flex-1 min-w-[200px]">
+              <Label htmlFor="budget" className="text-xs text-muted-foreground">
+                How much do you want to spend today? (KES)
+              </Label>
               <Input
                 id="budget"
                 type="number"
@@ -144,57 +162,66 @@ const Food = () => {
                 onChange={(e) => setBudget(Math.max(0, Number(e.target.value) || 0))}
               />
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-10 gap-1"
+              onClick={() => setShuffleSeed((s) => s + 1)}
+            >
+              <Shuffle className="h-3.5 w-3.5" /> Shuffle
+            </Button>
             <div className="text-xs text-muted-foreground">
-              Split: Breakfast 25% · Lunch 40% · Supper 35%
+              {affordable.length} combo{affordable.length === 1 ? "" : "s"} fit your limit
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            {MEALS.map((m) => {
-              const slot = Math.round(budget * m.share);
-              const picks = pickFor(m.type);
-              return (
-                <Card key={m.type} className="bg-card/50">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">{m.label}</CardTitle>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 gap-1 px-2 text-xs"
-                        onClick={() => setShuffleKeys((s) => ({ ...s, [m.type]: s[m.type] + 1 }))}
-                      >
-                        <Shuffle className="h-3 w-3" /> Shuffle
-                      </Button>
-                    </div>
-                    <CardDescription className="text-xs">Slot: {KES(slot)}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {isLoading && <div className="text-xs text-muted-foreground">Loading…</div>}
-                    {!isLoading && picks.length === 0 && (
-                      <div className="flex items-center gap-2 rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-                        <AlertTriangle className="h-3 w-3" /> Nothing fits this slot. Increase budget or check survival combos below.
-                      </div>
-                    )}
-                    {picks.map((c) => (
-                      <button
-                        key={c.id}
-                        onClick={() => setPending(c)}
-                        className="group flex w-full items-center justify-between rounded-md border border-border bg-background/40 p-2 text-left transition-colors hover:border-primary/50 hover:bg-accent"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium">{c.name}</div>
-                          <div className="truncate text-xs text-muted-foreground capitalize">{c.category} · {c.items.join(", ")}</div>
-                        </div>
-                        <div className="ml-2 shrink-0 text-sm font-semibold">{KES(c.cost)}</div>
-                      </button>
-                    ))}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-          <p className="text-xs text-muted-foreground">{totalPickedHint}</p>
+          {affordable.length === 0 ? (
+            <div className="flex items-center gap-2 rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+              <AlertTriangle className="h-4 w-4 text-warning" />
+              {cheapestCost > 0
+                ? `Nothing under ${KES(budget)}. Cheapest combo is ${KES(cheapestCost)}.`
+                : "Loading combos…"}
+            </div>
+          ) : showSlots ? (
+            <div className="grid gap-4 md:grid-cols-3">
+              {meals.map((type) => {
+                const picks = grouped[type].slice(0, 3);
+                return (
+                  <Card key={type} className="bg-card/50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">{MEAL_LABEL[type]}</CardTitle>
+                      <CardDescription className="text-xs">
+                        {picks.length === 0 ? "No fit — try another slot" : `${picks.length} option${picks.length > 1 ? "s" : ""}`}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {isLoading && <div className="text-xs text-muted-foreground">Loading…</div>}
+                      {!isLoading && picks.length === 0 && (
+                        <div className="text-xs text-muted-foreground">Nothing under your limit for this slot.</div>
+                      )}
+                      {picks.map((c) => (
+                        <ComboButton key={c.id} combo={c} onPick={setPending} />
+                      ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            <Card className="bg-card/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Best picks under {KES(budget)}</CardTitle>
+                <CardDescription className="text-xs">
+                  Tight budget — skipping the 3-meal split. Pick what fits.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-2 sm:grid-cols-2">
+                {[...affordable].sort((a, b) => b.cost - a.cost).slice(0, 6).map((c) => (
+                  <ComboButton key={c.id} combo={c} onPick={setPending} />
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </CardContent>
       </Card>
 
@@ -284,5 +311,18 @@ const Food = () => {
     </div>
   );
 };
+
+const ComboButton = ({ combo, onPick }: { combo: MealCombo; onPick: (c: MealCombo) => void }) => (
+  <button
+    onClick={() => onPick(combo)}
+    className="group flex w-full items-center justify-between rounded-md border border-border bg-background/40 p-2 text-left transition-colors hover:border-primary/50 hover:bg-accent"
+  >
+    <div className="min-w-0">
+      <div className="truncate text-sm font-medium">{combo.name}</div>
+      <div className="truncate text-xs text-muted-foreground capitalize">{combo.category} · {combo.items.join(", ")}</div>
+    </div>
+    <div className="ml-2 shrink-0 text-sm font-semibold">{KES(combo.cost)}</div>
+  </button>
+);
 
 export default Food;

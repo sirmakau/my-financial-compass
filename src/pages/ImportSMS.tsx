@@ -18,21 +18,27 @@ const FULIZA_TOLERANCE = 1.0;
 interface ParsedTxn {
   mpesa_ref: string | null;
   type: string;
+  subtype?: "expense" | "income" | "transfer" | "loan" | "receivable" | "repayment";
   amount: number;
   counterparty: string | null;
+  purpose?: string | null;
   occurred_at: string;
   description: string;
   suggested_category: string;
   raw_message: string;
   confidence: number;
-  target?: "mpesa" | "fuliza";
+  target?: "mpesa" | "fuliza" | "kcb" | "ziidi" | "cash" | "other";
+  source_account_hint?: string | null;
+  dest_account_hint?: string | null;
   fuliza_outstanding?: number | null;
+  pending?: boolean;
   notes?: string;
 }
 
 interface Row extends ParsedTxn {
   _id: string;
   category_id: string | null;
+  account_id_override: string | null; // user can override the routed account
   include: boolean;
 }
 
@@ -58,14 +64,29 @@ const ImportSMS = () => {
     [accounts],
   );
 
+  // Map a target/hint label → an existing account id (case-insensitive name match)
+  const resolveAccountId = (label?: string | null): string | null => {
+    if (!label) return null;
+    const norm = label.toLowerCase().replace(/[-\s]/g, "");
+    // Heuristics: try exact-ish name, then aliases
+    const direct = accounts.find((a) => a.name.toLowerCase().replace(/[-\s]/g, "") === norm);
+    if (direct) return direct.id;
+    if (/mpesa/.test(norm)) return accounts.find((a) => /m-?pesa/i.test(a.name))?.id ?? null;
+    if (/kcb/.test(norm)) return accounts.find((a) => /kcb/i.test(a.name))?.id ?? null;
+    if (/ziidi/.test(norm)) return accounts.find((a) => /ziidi/i.test(a.name))?.id ?? null;
+    if (/fuliza/.test(norm)) return fulizaAccount?.id ?? null;
+    if (/cash/.test(norm)) return accounts.find((a) => /cash/i.test(a.name))?.id ?? null;
+    return null;
+  };
+
   const findCategoryIdByName = (name: string): string | null => {
     const exact = cats.find((c) => c.name.toLowerCase() === name.toLowerCase());
-    return exact?.id ?? cats.find((c) => c.name === "Other")?.id ?? null;
+    return exact?.id ?? cats.find((c) => c.name === "Miscellaneous")?.id ?? cats.find((c) => c.name === "Other")?.id ?? null;
   };
 
   const parse = async () => {
     if (!text.trim()) return toast.error("Paste M-Pesa messages first");
-    if (!accountId) return toast.error("Select the M-Pesa account to import into");
+    if (!accountId) return toast.error("Select the default M-Pesa account to import into");
     setParsing(true);
     try {
       const { data, error } = await supabase.functions.invoke("parse-mpesa", {
@@ -81,12 +102,20 @@ const ImportSMS = () => {
         setRows([]);
         return;
       }
-      setRows(parsed.map((p, i) => ({
-        ...p,
-        _id: `${i}-${p.mpesa_ref ?? Math.random()}`,
-        category_id: findCategoryIdByName(p.suggested_category),
-        include: true,
-      })));
+      setRows(parsed.map((p, i) => {
+        // Resolve account from target / source_account_hint (for outflow leg)
+        const routed =
+          resolveAccountId(p.target === "fuliza" ? "fuliza" : p.target) ??
+          resolveAccountId(p.source_account_hint) ??
+          (p.subtype === "transfer" && p.amount > 0 ? resolveAccountId(p.dest_account_hint) : null);
+        return {
+          ...p,
+          _id: `${i}-${p.mpesa_ref ?? Math.random()}`,
+          category_id: findCategoryIdByName(p.suggested_category),
+          account_id_override: routed,
+          include: true,
+        };
+      }));
       setFulizaAck(false);
       toast.success(`Parsed ${parsed.length} transaction${parsed.length > 1 ? "s" : ""}. Review below.`);
     } catch (e) {
@@ -124,16 +153,26 @@ const ImportSMS = () => {
     try {
       await batch.mutateAsync(selected.map((r) => {
         const useFuliza = r.target === "fuliza" && fulizaAccount;
+        const account_id = useFuliza ? fulizaAccount!.id : (r.account_id_override ?? accountId);
         return {
-          account_id: useFuliza ? fulizaAccount!.id : accountId,
+          account_id,
           category_id: r.category_id,
-          amount: r.amount,
+          amount: r.pending ? 0 : r.amount, // pending rows don't move balance; original amount stored in metadata
           occurred_at: r.occurred_at,
-          description: r.description,
+          description: r.description + (r.purpose ? ` · ${r.purpose}` : ""),
           counterparty: r.counterparty,
           mpesa_ref: r.mpesa_ref,
           raw_message: r.raw_message,
-        };
+          status: r.pending ? "pending" : "completed",
+          metadata: {
+            subtype: r.subtype ?? null,
+            purpose: r.purpose ?? null,
+            target: r.target ?? null,
+            source_account_hint: r.source_account_hint ?? null,
+            dest_account_hint: r.dest_account_hint ?? null,
+            pending_amount: r.pending ? r.amount : undefined,
+          },
+        } as any;
       }));
       toast.success(`Imported ${selected.length} transaction${selected.length > 1 ? "s" : ""}`);
       setRows([]); setText("");
@@ -304,11 +343,13 @@ const ImportSMS = () => {
                 <tr>
                   <th className="px-3 py-2.5 text-left">Keep</th>
                   <th className="px-3 py-2.5 text-left">Date</th>
-                  <th className="px-3 py-2.5 text-left">Counterparty</th>
+                  <th className="px-3 py-2.5 text-left">Counterparty / Purpose</th>
                   <th className="px-3 py-2.5 text-left">Description</th>
+                  <th className="px-3 py-2.5 text-left">Type</th>
+                  <th className="px-3 py-2.5 text-left">Account routing</th>
                   <th className="px-3 py-2.5 text-left">Category</th>
                   <th className="px-3 py-2.5 text-right">Amount</th>
-                  <th className="px-3 py-2.5 text-left">Confidence</th>
+                  <th className="px-3 py-2.5 text-left">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
@@ -326,22 +367,52 @@ const ImportSMS = () => {
                         onChange={(e) => update(r._id, { occurred_at: new Date(e.target.value).toISOString() })} />
                     </td>
                     <td className="px-3 py-2">
-                      <Input className="h-8 w-40 text-xs" value={r.counterparty ?? ""}
+                      <Input className="h-8 w-36 text-xs" value={r.counterparty ?? ""}
+                        placeholder="Counterparty"
                         onChange={(e) => update(r._id, { counterparty: e.target.value })} />
+                      <Input className="mt-1 h-7 w-36 text-[11px]" value={r.purpose ?? ""}
+                        placeholder="Purpose / note"
+                        onChange={(e) => update(r._id, { purpose: e.target.value })} />
                     </td>
                     <td className="px-3 py-2">
                       <Input className="h-8 w-56 text-xs" value={r.description}
                         onChange={(e) => update(r._id, { description: e.target.value })} />
-                      <div className="mt-1 flex flex-wrap items-center gap-1">
-                        {r.target === "fuliza" && (
-                          <Badge variant="outline" className="text-[10px]">→ Fuliza</Badge>
-                        )}
-                        {r.notes && <span className="text-[10px] text-warning">{r.notes}</span>}
-                      </div>
+                      {r.notes && <div className="mt-0.5 text-[10px] text-warning">{r.notes}</div>}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Select value={r.subtype ?? ""} onValueChange={(v) => update(r._id, { subtype: v as Row["subtype"] })}>
+                        <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="expense">Expense</SelectItem>
+                          <SelectItem value="income">Income</SelectItem>
+                          <SelectItem value="transfer">Transfer</SelectItem>
+                          <SelectItem value="loan">Loan</SelectItem>
+                          <SelectItem value="receivable">Receivable</SelectItem>
+                          <SelectItem value="repayment">Repayment</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Select
+                        value={r.account_id_override ?? accountId ?? ""}
+                        onValueChange={(v) => update(r._id, { account_id_override: v })}
+                      >
+                        <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {accounts.map((a) => (
+                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {r.subtype === "transfer" && r.source_account_hint && r.dest_account_hint && (
+                        <div className="mt-1 text-[10px] text-muted-foreground">
+                          {r.source_account_hint} → {r.dest_account_hint}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       <Select value={r.category_id ?? ""} onValueChange={(v) => update(r._id, { category_id: v })}>
-                        <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {cats.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                         </SelectContent>
@@ -354,7 +425,12 @@ const ImportSMS = () => {
                       <div className="mt-0.5 text-[10px] text-muted-foreground">{formatKES(r.amount, { signed: true })}</div>
                     </td>
                     <td className="px-3 py-2">
-                      <Badge variant={r.confidence >= 0.8 ? "default" : r.confidence >= 0.5 ? "secondary" : "outline"}>
+                      <label className="flex items-center gap-1.5 text-xs">
+                        <input type="checkbox" checked={!!r.pending}
+                          onChange={(e) => update(r._id, { pending: e.target.checked })} />
+                        Pending
+                      </label>
+                      <Badge variant={r.confidence >= 0.8 ? "default" : r.confidence >= 0.5 ? "secondary" : "outline"} className="mt-1">
                         {Math.round(r.confidence * 100)}%
                       </Badge>
                     </td>

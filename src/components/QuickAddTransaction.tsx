@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useAccounts, useCategories, useCreateTransaction } from "@/hooks/useFinance";
-import { Plus, Loader2 } from "lucide-react";
+import { useAccounts, useCategories, useCreateTransaction, useCreateCategory } from "@/hooks/useFinance";
+import { Plus, Loader2, PlusCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const schema = z.object({
@@ -29,6 +29,9 @@ export const QuickAddTransaction = ({ trigger }: { trigger?: React.ReactNode }) 
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
   const create = useCreateTransaction();
+  const createCat = useCreateCategory();
+  const [newCatOpen, setNewCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -107,15 +110,68 @@ export const QuickAddTransaction = ({ trigger }: { trigger?: React.ReactNode }) 
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Category</Label>
-              <Select value={form.watch("category_id") ?? ""} onValueChange={(v) => form.setValue("category_id", v)}>
-                <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between">
+                <Label>Category</Label>
+                <button
+                  type="button"
+                  onClick={() => setNewCatOpen((v) => !v)}
+                  className="flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <PlusCircle className="h-3 w-3" /> {newCatOpen ? "Cancel" : "New"}
+                </button>
+              </div>
+              {newCatOpen ? (
+                <div className="flex gap-2">
+                  <Input
+                    autoFocus
+                    placeholder="New category name"
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    onKeyDown={async (e) => {
+                      if (e.key !== "Enter" || !newCatName.trim()) return;
+                      e.preventDefault();
+                      const kind = form.watch("direction") === "in" ? "income" : "expense";
+                      try {
+                        const c = await createCat.mutateAsync({ name: newCatName.trim(), kind });
+                        form.setValue("category_id", c.id);
+                        setNewCatName("");
+                        setNewCatOpen(false);
+                        toast.success(`Added "${c.name}"`);
+                      } catch (err) {
+                        toast.error((err as Error).message);
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!newCatName.trim() || createCat.isPending}
+                    onClick={async () => {
+                      const kind = form.watch("direction") === "in" ? "income" : "expense";
+                      try {
+                        const c = await createCat.mutateAsync({ name: newCatName.trim(), kind });
+                        form.setValue("category_id", c.id);
+                        setNewCatName("");
+                        setNewCatOpen(false);
+                        toast.success(`Added "${c.name}"`);
+                      } catch (err) {
+                        toast.error((err as Error).message);
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+              ) : (
+                <Select value={form.watch("category_id") ?? ""} onValueChange={(v) => form.setValue("category_id", v)}>
+                  <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Date & time</Label>

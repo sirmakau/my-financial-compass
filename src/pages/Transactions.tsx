@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
-import { useAccounts, useCategories, useTransactions, useDeleteTransaction } from "@/hooks/useFinance";
+import { useAccounts, useCategories, useTransactions, useDeleteTransaction, useMarkTransactionDone } from "@/hooks/useFinance";
 import { formatKES, formatDateTime } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Loader2, Search } from "lucide-react";
+import { Trash2, Loader2, Search, CheckCircle2 } from "lucide-react";
 import { QuickAddTransaction } from "@/components/QuickAddTransaction";
 import { toast } from "sonner";
 
@@ -15,6 +15,7 @@ const Transactions = () => {
   const { data: accounts = [] } = useAccounts();
   const { data: cats = [] } = useCategories();
   const del = useDeleteTransaction();
+  const markDone = useMarkTransactionDone();
 
   const [q, setQ] = useState("");
   const [accountId, setAccountId] = useState<string>("all");
@@ -103,11 +104,19 @@ const Transactions = () => {
               <tbody className="divide-y divide-border/60">
                 {filtered.map((t) => {
                   const a = Number(t.amount);
+                  const isPending = (t as any).status === "pending";
                   return (
                     <tr key={t.id} className="hover:bg-secondary/20">
                       <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{formatDateTime(t.occurred_at)}</td>
                       <td className="px-4 py-3">
-                        <div className="font-medium">{t.counterparty || t.description || "—"}</div>
+                        <div className="flex items-center gap-2">
+                          <div className="font-medium">{t.counterparty || t.description || "—"}</div>
+                          {isPending && (
+                            <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-400">
+                              Pending
+                            </Badge>
+                          )}
+                        </div>
                         {t.counterparty && t.description && <div className="text-xs text-muted-foreground">{t.description}</div>}
                         {t.mpesa_ref && <div className="mt-0.5 font-mono-figure text-[10px] text-muted-foreground">{t.mpesa_ref}</div>}
                       </td>
@@ -118,14 +127,30 @@ const Transactions = () => {
                         {formatKES(a, { signed: true })}
                       </td>
                       <td className="px-2 py-3">
-                        <Button variant="ghost" size="icon" className="h-8 w-8"
-                          onClick={async () => {
-                            if (!confirm("Delete this transaction? Account balance will be adjusted.")) return;
-                            await del.mutateAsync(t.id);
-                            toast.success("Deleted");
-                          }}>
-                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          {isPending && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 gap-1 px-2 text-xs text-emerald-400 hover:text-emerald-300"
+                              onClick={async () => {
+                                if (!confirm("Mark this as received/paid? Account balance will update.")) return;
+                                await markDone.mutateAsync(t.id);
+                                toast.success("Marked as done");
+                              }}
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Done
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="icon" className="h-8 w-8"
+                            onClick={async () => {
+                              if (!confirm("Delete this transaction? Account balance will be adjusted.")) return;
+                              await del.mutateAsync(t.id);
+                              toast.success("Deleted");
+                            }}>
+                            <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );

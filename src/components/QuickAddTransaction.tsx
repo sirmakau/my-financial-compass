@@ -29,6 +29,9 @@ export const QuickAddTransaction = ({ trigger }: { trigger?: React.ReactNode }) 
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
   const create = useCreateTransaction();
+  const createCat = useCreateCategory();
+  const [newCatOpen, setNewCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),

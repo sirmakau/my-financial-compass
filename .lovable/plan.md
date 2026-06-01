@@ -1,54 +1,91 @@
-# Food & Finance Advisor — MVP Plan
+# Food & Finance Advisor + Accounts Enhancement
 
-A new `/food` module that turns your real Kenyan student spending patterns into a budget-aware meal suggester, with a HELB-mode badge driven by your actual M-Pesa + cash balance.
+Four independent modules, shipped in one pass.
 
-## What you get
+---
 
-1. **Food database** — seeded with base prices (mandazi 10, chapati 20, egg 20, sukuma 20, beans 40, ndengu 40, chips 130, chicken 300, nyama choma 500, etc.).
-2. **Combo engine** — pre-seeded breakfast / lunch / supper combos with cost + category (Survival, Fast, Healthy, Luxury, Street, Gym).
-3. **Budget suggester** — "I have X KES for today" → splits budget 25% breakfast / 40% lunch / 35% supper, then returns best top 3 combos per meal slot within its allocated slice, plus remaining balance. A **Shuffle** button per column re-draws from the same filtered pool (random sort, no new logic).
-4. **HELB mode badge** — computed from the *sum* of balances across **all** accounts where `type` is `cash` or `mpesa` (never per-account):
-  - `> 3000` → **HELB Reflected** (luxury combos surfaced)
-  - `800–3000` → **Normal Operation**
-  - `200–800` → **End Month** (survival combos prioritized)
-  - `< 200` → **Critical Condition** (hard-filter to `category = 'survival'` only — tea + mandazi / ugali + sukuma)
-5. **Optional logging** — picking a combo opens a confirm prompt: *"Log this as an expense?"* → if yes, inserts a negative transaction under `Food & Drinks` against a chosen account (defaults to M-Pesa; falls back to first available account if no M-Pesa exists). If no, it's just a suggestion.
+## Module 1 — Pending transactions + "Mark as Done"
 
-## Pages & UI
+### Schema (migration)
+Add to `public.transactions`:
+- `status text NOT NULL DEFAULT 'completed' CHECK (status IN ('pending','completed'))`
+- `completed_at timestamptz NULL`
 
-- New route `/food` → `src/pages/Food.tsx`, added to `AppLayout` nav.
-- Top: **HELB mode badge** + total cash+mpesa balance + budget input (defaults to balance).
-- Middle: three columns — Breakfast / Lunch / Supper — each shows top 3 combos within its budget slice, with cost, category chip, and a **Pick** + **Shuffle** button.
-- Below: **Combo browser** with category filter chips (Survival, Fast, Healthy, Luxury, Street, Gym).
-- "Pick" → confirm dialog: *Log as expense?* Yes (account picker, M-Pesa default → fallback to first account) / No / Cancel.
+Backfill: existing rows already get `'completed'` via default.
 
-## Data model
+### Balance integrity
+Current trigger `tg_apply_txn_to_balance` applies amount on every INSERT. We need pending rows to NOT affect balance until completed. Change:
+- INSERT: only apply if `NEW.status = 'completed'`; set `completed_at = now()` when completed at insert.
+- UPDATE: handle four transitions
+  - pending → completed: add `NEW.amount`, set `completed_at = now()`
+  - completed → pending: subtract `OLD.amount`, clear `completed_at`
+  - completed → completed: existing delta logic
+  - pending → pending: no balance change
+- DELETE: only subtract if `OLD.status = 'completed'`
 
-Two new tables (user-scoped, RLS owner-only):
+### Hook
+`useMarkTransactionDone()` in `useFinance.ts`: updates `{status:'completed', completed_at: new Date().toISOString()}`, invalidates `transactions` + `accounts`.
 
-- `foods` — `name`, `unit_price` (numeric), `typical_qty`, `actual_cost`, `is_home_cooked` (bool).
-- `meal_combos` — `name`, `meal_type` (text, CHECK `IN ('breakfast','lunch','supper')`), `category` (text, CHECK `IN ('survival','fast','healthy','luxury','street','gym')`), `cost` (numeric), `items` (jsonb list of food names).
+### UI (`src/pages/Transactions.tsx`)
+- Show "Pending" badge on `status='pending'` rows
+- Inline "Mark Done" button (with AlertDialog confirm) on those rows
+- After confirm → row updates, badge flips to "Done", button disappears
 
-Seeded globally for the signed-in user on first visit via `ensure_food_seed(p_user_id uuid)` SECURITY DEFINER — mirrors `ensure_user_categories`. Seeding is guarded against double-firing: the function checks `WHERE user_id = p_user_id` before inserting, and the client-side call uses a `hasSeeded` ref so it fires once per mount regardless of navigation.
+---
 
-Logging reuses the existing `transactions` table + existing `Food & Drinks` category; no schema change there.
+## Module 2 — Food page: manual budget + shuffle fix + balance source
+
+In `src/pages/Food.tsx`:
+- Replace 25/40/35 split with a single **Daily food limit** number input (default 300).
+- Suggester logic: from all combos, filter `cost <= limit`, sort by cost desc, group by `meal_type` and show top items per slot. If limit < cheapest combo, show empty state "Try a smaller snack — no combos under X". If limit ≥ ~250, show one pick per meal_type; otherwise show flat list of best affordable combos regardless of meal slot.
+- Shuffle fix: `setDisplayed(prev => [...prev].sort(() => Math.random() - 0.5))`.
+- HELB mode badge: change balance source from "cash type accounts" to **sum of accounts whose name matches `M-Pesa` or `KCB` (case-insensitive)**. Thresholds unchanged.
+
+No DB changes.
+
+---
+
+## Module 3 — Smarter M-Pesa parser
+
+Edit `supabase/functions/parse-mpesa/index.ts`:
+- Update system prompt so the model extracts: `amount`, `subtype` (expense|income|transfer|loan|receivable|repayment), `source_account_hint`, `dest_account_hint`, `counterparty`, `purpose`, `pending` boolean, `mpesa_ref`, `occurred_at`.
+- Output shape: array of `legs` where transfers produce two legs (debit + credit) linked by shared ref; receivables produce a single `pending` leg with no balance impact (status=pending); loans produce inflow leg + note.
+- Account routing: resolve `source_account_hint`/`dest_account_hint` against the user's accounts by case-insensitive name match (M-Pesa, KCB, Ziidi, Cash). Fall back to M-Pesa for ambiguous inflows.
+
+Update `src/pages/ImportSMS.tsx`:
+- Preview card now shows: amount, subtype, source account, dest account (with arrow for transfers), counterparty, purpose, pending flag.
+- Each field editable inline before save.
+- On save: insert with `status` (pending|completed) and `metadata` carrying counterparty/purpose/subtype.
+
+---
+
+## Module 4 — Categories: expanded seed + inline create
+
+### Migration
+Replace `ensure_user_categories()` body to seed the larger base list:
+Food & Drinks, Transport, Rent, Airtime & Data, Savings, Entertainment, Health, Clothing, Education, Business, Loan Repayment, Receivable, Transfer, Salary, Gift, Utilities, Shopping, Fees & Charges, Investment, Miscellaneous.
+Uses existing `ON CONFLICT (user_id, name) DO NOTHING` so re-running is safe and existing users get the new ones on next call.
+
+### UI
+In `QuickAddTransaction.tsx` category Select: add an "+ Create new…" option that opens an inline input. On Enter → insert into `categories` with chosen `kind`, refresh list, auto-select the new one.
+
+---
 
 ## Technical details
 
-- Migration adds `foods`, `meal_combos`, RLS policies, and `ensure_food_seed(p_user_id uuid)`. CHECK constraint names are explicit: `meal_combos_meal_type_check`, `meal_combos_category_check`.
-- New hook `src/hooks/useFood.ts`: `useFoods()`, `useCombos()`, `useEnsureFoodSeed()`, `useLogMealAsTxn()`.
-- Suggester is pure client-side:
-  1. Split daily budget → breakfast 25% / lunch 40% / supper 35%.
-  2. Filter combos by `cost <= slot_budget`.
-  3. If HELB mode is Critical, hard-filter to `category = 'survival'` before step 2.
-  4. Sort by cost desc, take top 3. Shuffle re-sorts with `sort(() => Math.random() - 0.5)`.
-- HELB mode computed from `useAccounts()` — `sum(balance) WHERE type IN ('cash','mpesa')`.
-- `useEnsureFoodSeed()` called once in `Food.tsx` via `useEffect` with a `hasSeeded` ref guard.
-- Reuse shadcn `Card`, `Badge`, `Dialog`, `Select`. No new deps.
-- No AI calls in MVP. No nutrition tracking yet (deferred to phase 2).
+### Files touched
+- **Migration 1**: alter transactions (status, completed_at) + replace `tg_apply_txn_to_balance`
+- **Migration 2**: replace `ensure_user_categories` with expanded seed
+- `src/hooks/useFinance.ts` — add `useMarkTransactionDone`
+- `src/pages/Transactions.tsx` — pending badge + mark-done button
+- `src/pages/Food.tsx` — budget input, shuffle fix, HELB balance source
+- `supabase/functions/parse-mpesa/index.ts` — richer extraction prompt + legs
+- `src/pages/ImportSMS.tsx` — editable preview, save with status/metadata
+- `src/components/QuickAddTransaction.tsx` — inline category create
 
-## Out of scope (later phases)
+### Risks / called out
+- Changing the balance trigger is invasive. All existing rows are `'completed'` so behavior is identical for current data — only newly-inserted `pending` rows differ. I will keep the trigger SECURITY DEFINER and preserve transfer logic.
+- The parser changes are prompt-only on the AI side; legacy single-leg messages still work because transfer detection is opt-in based on the model output.
 
-- Meal log history table & weekly analytics dashboard
-- Nutrition scoring (protein/carbs/veg, junk frequency nudges)
-- AI recommender that personalizes from recent meal history
+### Out of scope (deferred)
+Meal log analytics, nutrition scoring, AI personalization, loan repayment schedule, counterparty analytics.

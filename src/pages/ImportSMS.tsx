@@ -64,14 +64,29 @@ const ImportSMS = () => {
     [accounts],
   );
 
+  // Map a target/hint label → an existing account id (case-insensitive name match)
+  const resolveAccountId = (label?: string | null): string | null => {
+    if (!label) return null;
+    const norm = label.toLowerCase().replace(/[-\s]/g, "");
+    // Heuristics: try exact-ish name, then aliases
+    const direct = accounts.find((a) => a.name.toLowerCase().replace(/[-\s]/g, "") === norm);
+    if (direct) return direct.id;
+    if (/mpesa/.test(norm)) return accounts.find((a) => /m-?pesa/i.test(a.name))?.id ?? null;
+    if (/kcb/.test(norm)) return accounts.find((a) => /kcb/i.test(a.name))?.id ?? null;
+    if (/ziidi/.test(norm)) return accounts.find((a) => /ziidi/i.test(a.name))?.id ?? null;
+    if (/fuliza/.test(norm)) return fulizaAccount?.id ?? null;
+    if (/cash/.test(norm)) return accounts.find((a) => /cash/i.test(a.name))?.id ?? null;
+    return null;
+  };
+
   const findCategoryIdByName = (name: string): string | null => {
     const exact = cats.find((c) => c.name.toLowerCase() === name.toLowerCase());
-    return exact?.id ?? cats.find((c) => c.name === "Other")?.id ?? null;
+    return exact?.id ?? cats.find((c) => c.name === "Miscellaneous")?.id ?? cats.find((c) => c.name === "Other")?.id ?? null;
   };
 
   const parse = async () => {
     if (!text.trim()) return toast.error("Paste M-Pesa messages first");
-    if (!accountId) return toast.error("Select the M-Pesa account to import into");
+    if (!accountId) return toast.error("Select the default M-Pesa account to import into");
     setParsing(true);
     try {
       const { data, error } = await supabase.functions.invoke("parse-mpesa", {
@@ -87,12 +102,20 @@ const ImportSMS = () => {
         setRows([]);
         return;
       }
-      setRows(parsed.map((p, i) => ({
-        ...p,
-        _id: `${i}-${p.mpesa_ref ?? Math.random()}`,
-        category_id: findCategoryIdByName(p.suggested_category),
-        include: true,
-      })));
+      setRows(parsed.map((p, i) => {
+        // Resolve account from target / source_account_hint (for outflow leg)
+        const routed =
+          resolveAccountId(p.target === "fuliza" ? "fuliza" : p.target) ??
+          resolveAccountId(p.source_account_hint) ??
+          (p.subtype === "transfer" && p.amount > 0 ? resolveAccountId(p.dest_account_hint) : null);
+        return {
+          ...p,
+          _id: `${i}-${p.mpesa_ref ?? Math.random()}`,
+          category_id: findCategoryIdByName(p.suggested_category),
+          account_id_override: routed,
+          include: true,
+        };
+      }));
       setFulizaAck(false);
       toast.success(`Parsed ${parsed.length} transaction${parsed.length > 1 ? "s" : ""}. Review below.`);
     } catch (e) {

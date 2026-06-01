@@ -159,6 +159,8 @@ export interface TxnInput {
   mpesa_ref?: string | null;
   source?: TxnSource;
   raw_message?: string | null;
+  status?: "pending" | "completed";
+  metadata?: Record<string, unknown>;
 }
 
 export const useCreateTransaction = () => {

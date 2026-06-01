@@ -343,11 +343,13 @@ const ImportSMS = () => {
                 <tr>
                   <th className="px-3 py-2.5 text-left">Keep</th>
                   <th className="px-3 py-2.5 text-left">Date</th>
-                  <th className="px-3 py-2.5 text-left">Counterparty</th>
+                  <th className="px-3 py-2.5 text-left">Counterparty / Purpose</th>
                   <th className="px-3 py-2.5 text-left">Description</th>
+                  <th className="px-3 py-2.5 text-left">Type</th>
+                  <th className="px-3 py-2.5 text-left">Account routing</th>
                   <th className="px-3 py-2.5 text-left">Category</th>
                   <th className="px-3 py-2.5 text-right">Amount</th>
-                  <th className="px-3 py-2.5 text-left">Confidence</th>
+                  <th className="px-3 py-2.5 text-left">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
@@ -365,22 +367,52 @@ const ImportSMS = () => {
                         onChange={(e) => update(r._id, { occurred_at: new Date(e.target.value).toISOString() })} />
                     </td>
                     <td className="px-3 py-2">
-                      <Input className="h-8 w-40 text-xs" value={r.counterparty ?? ""}
+                      <Input className="h-8 w-36 text-xs" value={r.counterparty ?? ""}
+                        placeholder="Counterparty"
                         onChange={(e) => update(r._id, { counterparty: e.target.value })} />
+                      <Input className="mt-1 h-7 w-36 text-[11px]" value={r.purpose ?? ""}
+                        placeholder="Purpose / note"
+                        onChange={(e) => update(r._id, { purpose: e.target.value })} />
                     </td>
                     <td className="px-3 py-2">
                       <Input className="h-8 w-56 text-xs" value={r.description}
                         onChange={(e) => update(r._id, { description: e.target.value })} />
-                      <div className="mt-1 flex flex-wrap items-center gap-1">
-                        {r.target === "fuliza" && (
-                          <Badge variant="outline" className="text-[10px]">→ Fuliza</Badge>
-                        )}
-                        {r.notes && <span className="text-[10px] text-warning">{r.notes}</span>}
-                      </div>
+                      {r.notes && <div className="mt-0.5 text-[10px] text-warning">{r.notes}</div>}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Select value={r.subtype ?? ""} onValueChange={(v) => update(r._id, { subtype: v as Row["subtype"] })}>
+                        <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="expense">Expense</SelectItem>
+                          <SelectItem value="income">Income</SelectItem>
+                          <SelectItem value="transfer">Transfer</SelectItem>
+                          <SelectItem value="loan">Loan</SelectItem>
+                          <SelectItem value="receivable">Receivable</SelectItem>
+                          <SelectItem value="repayment">Repayment</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Select
+                        value={r.account_id_override ?? accountId ?? ""}
+                        onValueChange={(v) => update(r._id, { account_id_override: v })}
+                      >
+                        <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {accounts.map((a) => (
+                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {r.subtype === "transfer" && r.source_account_hint && r.dest_account_hint && (
+                        <div className="mt-1 text-[10px] text-muted-foreground">
+                          {r.source_account_hint} → {r.dest_account_hint}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       <Select value={r.category_id ?? ""} onValueChange={(v) => update(r._id, { category_id: v })}>
-                        <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {cats.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                         </SelectContent>
@@ -393,7 +425,12 @@ const ImportSMS = () => {
                       <div className="mt-0.5 text-[10px] text-muted-foreground">{formatKES(r.amount, { signed: true })}</div>
                     </td>
                     <td className="px-3 py-2">
-                      <Badge variant={r.confidence >= 0.8 ? "default" : r.confidence >= 0.5 ? "secondary" : "outline"}>
+                      <label className="flex items-center gap-1.5 text-xs">
+                        <input type="checkbox" checked={!!r.pending}
+                          onChange={(e) => update(r._id, { pending: e.target.checked })} />
+                        Pending
+                      </label>
+                      <Badge variant={r.confidence >= 0.8 ? "default" : r.confidence >= 0.5 ? "secondary" : "outline"} className="mt-1">
                         {Math.round(r.confidence * 100)}%
                       </Badge>
                     </td>

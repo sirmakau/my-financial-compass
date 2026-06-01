@@ -18,21 +18,27 @@ const FULIZA_TOLERANCE = 1.0;
 interface ParsedTxn {
   mpesa_ref: string | null;
   type: string;
+  subtype?: "expense" | "income" | "transfer" | "loan" | "receivable" | "repayment";
   amount: number;
   counterparty: string | null;
+  purpose?: string | null;
   occurred_at: string;
   description: string;
   suggested_category: string;
   raw_message: string;
   confidence: number;
-  target?: "mpesa" | "fuliza";
+  target?: "mpesa" | "fuliza" | "kcb" | "ziidi" | "cash" | "other";
+  source_account_hint?: string | null;
+  dest_account_hint?: string | null;
   fuliza_outstanding?: number | null;
+  pending?: boolean;
   notes?: string;
 }
 
 interface Row extends ParsedTxn {
   _id: string;
   category_id: string | null;
+  account_id_override: string | null; // user can override the routed account
   include: boolean;
 }
 

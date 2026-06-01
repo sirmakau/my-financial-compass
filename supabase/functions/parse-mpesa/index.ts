@@ -184,12 +184,14 @@ Deno.serve(async (req) => {
     for (const t of transactions) {
       if (!t || typeof t !== "object") continue;
       if (!t.mpesa_ref) { errors.push(`Row dropped: missing mpesa_ref (${t.description ?? "?"})`); continue; }
-      if (!t.amount || Number.isNaN(Number(t.amount))) { errors.push(`Row dropped: invalid amount for ${t.mpesa_ref}`); continue; }
+      if (!t.amount || Number.isNaN(Number(t.amount))) {
+        if (!t.pending) { errors.push(`Row dropped: invalid amount for ${t.mpesa_ref}`); continue; }
+      }
       const d = new Date(t.occurred_at);
       if (Number.isNaN(d.getTime())) { errors.push(`Row dropped: invalid date for ${t.mpesa_ref}`); continue; }
       // Sign-convention guard: outflow types must be negative; inflow types positive.
-      const outflow = ["send","paybill","buygoods","withdraw","airtime","fee","fuliza_borrow"];
-      const inflow = ["receive","deposit","fuliza_repay"];
+      const outflow = ["send","paybill","buygoods","withdraw","airtime","fee","fuliza_borrow","repayment"];
+      const inflow = ["receive","deposit","fuliza_repay","loan","receivable"];
       if (outflow.includes(t.type) && Number(t.amount) > 0) t.amount = -Math.abs(Number(t.amount));
       if (inflow.includes(t.type) && Number(t.amount) < 0) t.amount = Math.abs(Number(t.amount));
       // Fuliza-target rule: borrow→negative, repay→positive on the fuliza account.

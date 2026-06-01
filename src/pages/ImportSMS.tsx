@@ -153,16 +153,26 @@ const ImportSMS = () => {
     try {
       await batch.mutateAsync(selected.map((r) => {
         const useFuliza = r.target === "fuliza" && fulizaAccount;
+        const account_id = useFuliza ? fulizaAccount!.id : (r.account_id_override ?? accountId);
         return {
-          account_id: useFuliza ? fulizaAccount!.id : accountId,
+          account_id,
           category_id: r.category_id,
-          amount: r.amount,
+          amount: r.pending ? 0 : r.amount, // pending rows don't move balance; original amount stored in metadata
           occurred_at: r.occurred_at,
-          description: r.description,
+          description: r.description + (r.purpose ? ` · ${r.purpose}` : ""),
           counterparty: r.counterparty,
           mpesa_ref: r.mpesa_ref,
           raw_message: r.raw_message,
-        };
+          status: r.pending ? "pending" : "completed",
+          metadata: {
+            subtype: r.subtype ?? null,
+            purpose: r.purpose ?? null,
+            target: r.target ?? null,
+            source_account_hint: r.source_account_hint ?? null,
+            dest_account_hint: r.dest_account_hint ?? null,
+            pending_amount: r.pending ? r.amount : undefined,
+          },
+        } as any;
       }));
       toast.success(`Imported ${selected.length} transaction${selected.length > 1 ? "s" : ""}`);
       setRows([]); setText("");

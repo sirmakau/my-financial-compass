@@ -199,6 +199,7 @@ export type Database = {
           account_id: string
           amount: number
           category_id: string | null
+          completed_at: string | null
           counterparty: string | null
           created_at: string
           description: string | null
@@ -208,6 +209,7 @@ export type Database = {
           occurred_at: string
           raw_message: string | null
           source: Database["public"]["Enums"]["txn_source"]
+          status: string
           updated_at: string
           user_id: string
         }
@@ -215,6 +217,7 @@ export type Database = {
           account_id: string
           amount: number
           category_id?: string | null
+          completed_at?: string | null
           counterparty?: string | null
           created_at?: string
           description?: string | null
@@ -224,6 +227,7 @@ export type Database = {
           occurred_at?: string
           raw_message?: string | null
           source?: Database["public"]["Enums"]["txn_source"]
+          status?: string
           updated_at?: string
           user_id: string
         }
@@ -231,6 +235,7 @@ export type Database = {
           account_id?: string
           amount?: number
           category_id?: string | null
+          completed_at?: string | null
           counterparty?: string | null
           created_at?: string
           description?: string | null
@@ -240,6 +245,7 @@ export type Database = {
           occurred_at?: string
           raw_message?: string | null
           source?: Database["public"]["Enums"]["txn_source"]
+          status?: string
           updated_at?: string
           user_id?: string
         }

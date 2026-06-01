@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useAccounts, useCategories, useCreateTransaction } from "@/hooks/useFinance";
-import { Plus, Loader2 } from "lucide-react";
+import { useAccounts, useCategories, useCreateTransaction, useCreateCategory } from "@/hooks/useFinance";
+import { Plus, Loader2, PlusCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const schema = z.object({

@@ -7,16 +7,21 @@ const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 
 interface ParsedTxn {
   mpesa_ref: string | null;
-  type: "receive" | "send" | "paybill" | "buygoods" | "withdraw" | "deposit" | "airtime" | "fee" | "reversal" | "fuliza_borrow" | "fuliza_repay" | "other";
+  type: "receive" | "send" | "paybill" | "buygoods" | "withdraw" | "deposit" | "airtime" | "fee" | "reversal" | "fuliza_borrow" | "fuliza_repay" | "transfer" | "loan" | "receivable" | "repayment" | "other";
+  subtype?: "expense" | "income" | "transfer" | "loan" | "receivable" | "repayment";
   amount: number;       // signed: positive = inflow, negative = outflow
   counterparty: string | null;
+  purpose?: string | null;
   occurred_at: string;  // ISO 8601 with +03:00
   description: string;
   suggested_category: string;
   raw_message: string;
   confidence: number;   // 0-1
-  target: "mpesa" | "fuliza";
+  target: "mpesa" | "fuliza" | "kcb" | "ziidi" | "cash" | "other";
+  source_account_hint?: string | null;
+  dest_account_hint?: string | null;
   fuliza_outstanding?: number | null;
+  pending?: boolean;
   notes?: string;
 }
 

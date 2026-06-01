@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
-import { useAccounts, useCategories, useTransactions, useDeleteTransaction } from "@/hooks/useFinance";
+import { useAccounts, useCategories, useTransactions, useDeleteTransaction, useMarkTransactionDone } from "@/hooks/useFinance";
 import { formatKES, formatDateTime } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Loader2, Search } from "lucide-react";
+import { Trash2, Loader2, Search, CheckCircle2 } from "lucide-react";
 import { QuickAddTransaction } from "@/components/QuickAddTransaction";
 import { toast } from "sonner";
 
@@ -15,6 +15,7 @@ const Transactions = () => {
   const { data: accounts = [] } = useAccounts();
   const { data: cats = [] } = useCategories();
   const del = useDeleteTransaction();
+  const markDone = useMarkTransactionDone();
 
   const [q, setQ] = useState("");
   const [accountId, setAccountId] = useState<string>("all");

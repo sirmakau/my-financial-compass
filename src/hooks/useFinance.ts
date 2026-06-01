@@ -160,7 +160,7 @@ export interface TxnInput {
   source?: TxnSource;
   raw_message?: string | null;
   status?: "pending" | "completed";
-  metadata?: Record<string, unknown>;
+  metadata?: any;
 }
 
 export const useCreateTransaction = () => {

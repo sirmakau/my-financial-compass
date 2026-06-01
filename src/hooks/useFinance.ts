@@ -213,3 +213,40 @@ export const useDeleteTransaction = () => {
     },
   });
 };
+
+export const useMarkTransactionDone = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("transactions")
+        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+      qc.invalidateQueries({ queryKey: ["accounts"] });
+    },
+  });
+};
+
+export const useCreateCategory = () => {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (input: { name: string; kind: CategoryKind }) => {
+      if (!user) throw new Error("Not authenticated");
+      const { data, error } = await supabase
+        .from("categories")
+        .insert({ user_id: user.id, name: input.name.trim(), kind: input.kind })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
+};

@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.seed_meal_combos_for_user(uuid) FROM PUBLIC, anon, authenticated;

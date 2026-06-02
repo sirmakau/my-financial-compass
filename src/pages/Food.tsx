@@ -26,9 +26,9 @@ const CATEGORIES: { value: ComboCategory | "all"; label: string }[] = [
 type HelbMode = "reflected" | "normal" | "endmonth" | "critical";
 
 const helbFrom = (bal: number): HelbMode => {
-  if (bal > 3000) return "reflected";
-  if (bal >= 800) return "normal";
-  if (bal >= 200) return "endmonth";
+  if (bal >= 10000) return "reflected";
+  if (bal >= 4000) return "normal";
+  if (bal >= 1000) return "endmonth";
   return "critical";
 };
 

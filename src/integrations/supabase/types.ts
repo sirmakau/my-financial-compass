@@ -278,6 +278,10 @@ export type Database = {
       ensure_all_users_categories: { Args: never; Returns: number }
       ensure_food_seed: { Args: { p_user_id?: string }; Returns: number }
       ensure_user_categories: { Args: { p_user_id?: string }; Returns: number }
+      seed_meal_combos_for_user: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
     }
     Enums: {
       account_type: "cash" | "investment" | "debt" | "receivable"

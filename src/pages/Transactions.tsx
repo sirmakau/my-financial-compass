@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAccounts, useCategories, useTransactions, useDeleteTransaction, useMarkTransactionDone } from "@/hooks/useFinance";
 import { formatKES, formatDateTime } from "@/lib/format";
 import { Card } from "@/components/ui/card";
@@ -6,9 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Loader2, Search, CheckCircle2 } from "lucide-react";
+import { Trash2, Loader2, Search, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { QuickAddTransaction } from "@/components/QuickAddTransaction";
 import { toast } from "sonner";
+
+const PAGE_SIZE = 25;
 
 const Transactions = () => {
   const { data: txns = [], isLoading } = useTransactions(500);
@@ -21,6 +24,9 @@ const Transactions = () => {
   const [accountId, setAccountId] = useState<string>("all");
   const [categoryId, setCategoryId] = useState<string>("all");
   const [direction, setDirection] = useState<"all" | "in" | "out">("all");
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlPage = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
 
   const accountName = (id: string) => accounts.find((a) => a.id === id)?.name ?? "—";
   const categoryName = (id: string | null) => cats.find((c) => c.id === id)?.name ?? "Uncategorized";
@@ -40,6 +46,57 @@ const Transactions = () => {
       return true;
     });
   }, [txns, accountId, categoryId, direction, q]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const page = Math.min(urlPage, totalPages);
+  const pageItems = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page],
+  );
+
+  const setPage = (next: number) => {
+    const clamped = Math.min(Math.max(1, next), totalPages);
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        if (clamped <= 1) sp.delete("page");
+        else sp.set("page", String(clamped));
+        return sp;
+      },
+      { replace: false },
+    );
+  };
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    if (urlPage !== 1) {
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev);
+          sp.delete("page");
+          return sp;
+        },
+        { replace: true },
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, accountId, categoryId, direction]);
+
+  // Clamp URL page if it exceeds total
+  useEffect(() => {
+    if (urlPage > totalPages) {
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev);
+          if (totalPages <= 1) sp.delete("page");
+          else sp.set("page", String(totalPages));
+          return sp;
+        },
+        { replace: true },
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalPages]);
 
   return (
     <div className="space-y-6">
@@ -102,7 +159,7 @@ const Transactions = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {filtered.map((t) => {
+                {pageItems.map((t) => {
                   const a = Number(t.amount);
                   const isPending = (t as any).status === "pending";
                   return (
@@ -157,6 +214,36 @@ const Transactions = () => {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        {filtered.length > PAGE_SIZE && (
+          <div className="flex items-center justify-between gap-3 border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
+            <span>
+              Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1 px-2"
+                disabled={page <= 1}
+                onClick={() => setPage(page - 1)}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" /> Prev
+              </Button>
+              <span className="font-mono-figure text-foreground">
+                {page} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1 px-2"
+                disabled={page >= totalPages}
+                onClick={() => setPage(page + 1)}
+              >
+                Next <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         )}
       </Card>

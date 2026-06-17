@@ -52,12 +52,18 @@ const Dashboard = () => {
   }, [txns]);
 
   const cashFlowSeries = useMemo(() => {
-    const days: Record<string, { date: string; in: number; out: number }> = {};
+    const days: Record<string, { date: string; label: string; in: number; out: number; net: number }> = {};
     const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 29);
     for (let i = 0; i < 30; i++) {
       const d = new Date(cutoff); d.setDate(cutoff.getDate() + i);
       const k = d.toISOString().slice(0, 10);
-      days[k] = { date: k.slice(5), in: 0, out: 0 };
+      days[k] = {
+        date: k,
+        label: d.toLocaleDateString("en-KE", { month: "short", day: "2-digit" }),
+        in: 0,
+        out: 0,
+        net: 0,
+      };
     }
     txns.forEach((t) => {
       const k = new Date(t.occurred_at).toISOString().slice(0, 10);
@@ -66,23 +72,53 @@ const Dashboard = () => {
         if (a >= 0) days[k].in += a; else days[k].out += Math.abs(a);
       }
     });
-    return Object.values(days);
+    return Object.values(days).map((d) => ({ ...d, net: d.in - d.out }));
   }, [txns]);
 
-  const spendByCategory = useMemo(() => {
+  const flowMax = useMemo(
+    () => cashFlowSeries.reduce((m, d) => Math.max(m, d.in, d.out), 0),
+    [cashFlowSeries]
+  );
+  const hasFlow = flowMax > 0;
+
+  const [flowMode, setFlowMode] = useState<"all" | "in" | "out" | "net">("all");
+
+  const { topSpend, totalSpend } = useMemo(() => {
     const map = new Map<string, number>();
     const catName = (id: string | null) => cats.find((c) => c.id === id)?.name ?? "Uncategorized";
     txns.filter((t) => Number(t.amount) < 0).forEach((t) => {
       const k = catName(t.category_id);
       map.set(k, (map.get(k) ?? 0) + Math.abs(Number(t.amount)));
     });
-    return Array.from(map.entries())
+    const all = Array.from(map.entries())
       .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6);
+      .sort((a, b) => b.value - a.value);
+    const total = all.reduce((s, x) => s + x.value, 0);
+    const top = all.slice(0, 5);
+    const restSum = all.slice(5).reduce((s, x) => s + x.value, 0);
+    if (restSum > 0) top.push({ name: "Other", value: restSum });
+    return { topSpend: top, totalSpend: total };
   }, [txns, cats]);
 
-  const pieColors = ["hsl(158 70% 48%)", "hsl(180 70% 50%)", "hsl(38 92% 55%)", "hsl(280 70% 60%)", "hsl(340 70% 60%)", "hsl(220 12% 50%)"];
+  const pieColors = [
+    "hsl(var(--inflow))",
+    "hsl(180 70% 50%)",
+    "hsl(var(--warning))",
+    "hsl(265 70% 62%)",
+    "hsl(var(--outflow))",
+    "hsl(220 12% 50%)",
+  ];
+
+  // Y-axis ticks: clean, non-duplicated, rounded to nice numbers
+  const yTicks = useMemo(() => {
+    if (flowMax <= 0) return [0, 250, 500, 750, 1000];
+    const step = niceStep(flowMax / 4);
+    const top = Math.ceil(flowMax / step) * step;
+    const ticks: number[] = [];
+    for (let v = 0; v <= top; v += step) ticks.push(v);
+    return ticks;
+  }, [flowMax]);
+
 
   if (aL || tL) {
     return <div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;

@@ -5,7 +5,24 @@ import { Card } from "@/components/ui/card";
 import { QuickAddTransaction } from "@/components/QuickAddTransaction";
 import { ArrowDownRight, ArrowUpRight, Wallet, TrendingUp, Landmark, HandCoins, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { AreaChart, Area, LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell } from "recharts";
+import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell } from "recharts";
+
+const niceStep = (raw: number) => {
+  if (raw <= 0) return 1;
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const n = raw / pow;
+  const m = n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10;
+  return m * pow;
+};
+
+const kFmt = (v: number) => {
+  if (v === 0) return "0";
+  if (Math.abs(v) >= 1000) {
+    const k = v / 1000;
+    return `${Number.isInteger(k) ? k : k.toFixed(1)}k`;
+  }
+  return `${v}`;
+};
 
 
 const TYPE_META = {

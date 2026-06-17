@@ -1,9 +1,14 @@
 // Parses raw M-Pesa SMS messages into structured transactions using Lovable AI.
 // Enforces strict accounting rules (sign convention, double-entry for Fuliza, validation).
+// Learns from the user's past confirmed transactions to classify counterparties consistently.
 // Returns suggested transactions WITHOUT inserting them — the client confirms first.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.105.1/cors";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.105.1";
 
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+
 
 interface ParsedTxn {
   mpesa_ref: string | null;
@@ -88,6 +93,11 @@ EXAMPLES:
 
 ERROR CONDITIONS (push string to "errors", row OMITTED): Amount missing or zero (except pending receivables), transaction intent unknown.
 
+LEARNING FROM HISTORY:
+- The user prompt may include a "USER HISTORY" block summarizing how this same user previously classified counterparties, paybill till numbers, and recurring purposes.
+- When a new message matches a counterparty/till/keyword present in USER HISTORY, prefer the user's previously chosen suggested_category, target account, and subtype. Override only if the new message clearly contradicts it (e.g. category mismatch by intent).
+- Treat history as STRONG prior, not absolute truth. Bump confidence to ≥0.85 when classification mirrors a consistent historical pattern.
+
 Output via the emit_transactions tool only. Never invent values. Be conservative.`;
 
 Deno.serve(async (req) => {
@@ -102,7 +112,16 @@ Deno.serve(async (req) => {
       ? categories.filter((c) => typeof c === "string")
       : ["Other"];
 
-    const userPrompt = `Available categories: ${cats.join(", ")}\n\nRaw M-Pesa messages (may be multiple, separated by blank lines or newlines):\n\n${messages}`;
+    // Build learning context from the user's past confirmed transactions.
+    const learningContext = await buildLearningContext(req.headers.get("Authorization"));
+
+    const userPrompt = `Available categories: ${cats.join(", ")}
+
+${learningContext}
+
+Raw M-Pesa messages (may be multiple, separated by blank lines or newlines):
+
+${messages}`;
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -110,6 +129,7 @@ Deno.serve(async (req) => {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
+
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
@@ -231,3 +251,61 @@ function json(body: unknown, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
+
+// Builds a compact "USER HISTORY" block from the caller's recent confirmed transactions.
+// The AI uses it as a strong prior when classifying new SMS rows.
+async function buildLearningContext(authHeader: string | null): Promise<string> {
+  if (!authHeader) return "USER HISTORY: (none — no auth)";
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    });
+
+    const { data: txns, error } = await supabase
+      .from("transactions")
+      .select("amount, counterparty, description, metadata, status, category:categories(name), account:accounts(name,type,subtype)")
+      .eq("status", "completed")
+      .order("occurred_at", { ascending: false })
+      .limit(200);
+
+    if (error || !txns || txns.length === 0) return "USER HISTORY: (no past transactions)";
+
+    // Aggregate per counterparty: most frequent category + most frequent account.
+    type Bucket = { count: number; categories: Map<string, number>; accounts: Map<string, number>; purposes: Map<string, number>; sign: { in: number; out: number } };
+    const byParty = new Map<string, Bucket>();
+    for (const t of txns as Array<{ amount: number; counterparty: string | null; description: string | null; metadata: Record<string, unknown> | null; category: { name: string } | null; account: { name: string; type: string; subtype: string | null } | null }>) {
+      const key = (t.counterparty ?? "").trim();
+      if (!key) continue;
+      const b = byParty.get(key) ?? { count: 0, categories: new Map(), accounts: new Map(), purposes: new Map(), sign: { in: 0, out: 0 } };
+      b.count++;
+      if (t.category?.name) b.categories.set(t.category.name, (b.categories.get(t.category.name) ?? 0) + 1);
+      if (t.account?.name) b.accounts.set(t.account.name, (b.accounts.get(t.account.name) ?? 0) + 1);
+      const purpose = (t.metadata as { purpose?: string } | null)?.purpose;
+      if (purpose) b.purposes.set(purpose, (b.purposes.get(purpose) ?? 0) + 1);
+      if (Number(t.amount) >= 0) b.sign.in++; else b.sign.out++;
+      byParty.set(key, b);
+    }
+
+    const top = (m: Map<string, number>) => [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+
+    const rows = [...byParty.entries()]
+      .filter(([, b]) => b.count >= 1)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 40)
+      .map(([party, b]) => {
+        const cat = top(b.categories) ?? "—";
+        const acct = top(b.accounts) ?? "—";
+        const purpose = top(b.purposes);
+        const direction = b.sign.in > b.sign.out ? "inflow" : "outflow";
+        return `- "${party}" → category=${cat}, account=${acct}, ${direction}${purpose ? `, usual purpose=${purpose}` : ""} (seen ${b.count}×)`;
+      });
+
+    if (rows.length === 0) return "USER HISTORY: (no counterparty patterns yet)";
+
+    return `USER HISTORY — past classifications by this user (use as STRONG prior when a new SMS matches):\n${rows.join("\n")}`;
+  } catch (e) {
+    return `USER HISTORY: (unavailable — ${(e as Error).message})`;
+  }
+}
+

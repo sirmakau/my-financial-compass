@@ -93,6 +93,11 @@ EXAMPLES:
 
 ERROR CONDITIONS (push string to "errors", row OMITTED): Amount missing or zero (except pending receivables), transaction intent unknown.
 
+LEARNING FROM HISTORY:
+- The user prompt may include a "USER HISTORY" block summarizing how this same user previously classified counterparties, paybill till numbers, and recurring purposes.
+- When a new message matches a counterparty/till/keyword present in USER HISTORY, prefer the user's previously chosen suggested_category, target account, and subtype. Override only if the new message clearly contradicts it (e.g. category mismatch by intent).
+- Treat history as STRONG prior, not absolute truth. Bump confidence to ≥0.85 when classification mirrors a consistent historical pattern.
+
 Output via the emit_transactions tool only. Never invent values. Be conservative.`;
 
 Deno.serve(async (req) => {

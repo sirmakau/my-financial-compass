@@ -1,91 +1,31 @@
-# Food & Finance Advisor + Accounts Enhancement
+## Chart improvements (Dashboard)
 
-Four independent modules, shipped in one pass.
+Focused polish for the two charts on the Dashboard, optimized for mobile (360px) where most issues show up.
 
----
+### Cash flow chart (last 30 days)
+- Switch from raw `Line` to a smooth **stacked area** with gradient fills (inflow green, outflow red) for a cleaner, more readable shape than the spiky lines.
+- Fix duplicate axis labels (`2k, 2k, 1k, 1k…`) by formatting ticks consistently and de-duplicating: round to nearest 500 and use `allowDecimals={false}` + a stable `tickFormatter`.
+- Reduce x-axis crowding: show only ~6 ticks (`interval="preserveStartEnd"` + computed interval), rotate slightly on mobile, and shorten format to `Jun 8` style.
+- Add subtle horizontal-only gridlines (drop vertical), thinner border color.
+- Add a compact **net line** overlay (inflow − outflow) toggleable via a small segmented control: All / In / Out / Net.
+- Improve tooltip: bold date header, KES formatting already in place, add a "Net" row.
+- Empty-state when all values are 0.
 
-## Module 1 — Pending transactions + "Mark as Done"
+### Top spending categories (donut)
+- Add **center label** showing total spend and "This period".
+- Add **outer labels with leader lines** for top 3 slices (category + %); rest grouped into "Other".
+- Move legend to a 2-column list **below** the donut on mobile with color dot + name + amount + % — currently the legend is cut/cramped.
+- Slightly thicker ring, remove white stroke (uses card bg via `stroke="hsl(var(--card))"`) for cohesion with dark theme.
+- Use a refined palette aligned with existing tokens (inflow/outflow/warning/primary + 2 accents) instead of the current bright mix.
 
-### Schema (migration)
-Add to `public.transactions`:
-- `status text NOT NULL DEFAULT 'completed' CHECK (status IN ('pending','completed'))`
-- `completed_at timestamptz NULL`
+### Shared
+- Wrap both in consistent card headers with a small time-range hint ("Last 30 days" / "This month").
+- Ensure responsive heights: 220px on mobile, 256px on md+.
+- Keep all colors as `hsl(var(--…))` tokens; no hardcoded hex.
 
-Backfill: existing rows already get `'completed'` via default.
+### Files to change
+- `src/pages/Dashboard.tsx` — chart components, data shaping (add net series, totals, top-3 + other), legend/center label, axis formatters, segmented toggle.
 
-### Balance integrity
-Current trigger `tg_apply_txn_to_balance` applies amount on every INSERT. We need pending rows to NOT affect balance until completed. Change:
-- INSERT: only apply if `NEW.status = 'completed'`; set `completed_at = now()` when completed at insert.
-- UPDATE: handle four transitions
-  - pending → completed: add `NEW.amount`, set `completed_at = now()`
-  - completed → pending: subtract `OLD.amount`, clear `completed_at`
-  - completed → completed: existing delta logic
-  - pending → pending: no balance change
-- DELETE: only subtract if `OLD.status = 'completed'`
-
-### Hook
-`useMarkTransactionDone()` in `useFinance.ts`: updates `{status:'completed', completed_at: new Date().toISOString()}`, invalidates `transactions` + `accounts`.
-
-### UI (`src/pages/Transactions.tsx`)
-- Show "Pending" badge on `status='pending'` rows
-- Inline "Mark Done" button (with AlertDialog confirm) on those rows
-- After confirm → row updates, badge flips to "Done", button disappears
-
----
-
-## Module 2 — Food page: manual budget + shuffle fix + balance source
-
-In `src/pages/Food.tsx`:
-- Replace 25/40/35 split with a single **Daily food limit** number input (default 300).
-- Suggester logic: from all combos, filter `cost <= limit`, sort by cost desc, group by `meal_type` and show top items per slot. If limit < cheapest combo, show empty state "Try a smaller snack — no combos under X". If limit ≥ ~250, show one pick per meal_type; otherwise show flat list of best affordable combos regardless of meal slot.
-- Shuffle fix: `setDisplayed(prev => [...prev].sort(() => Math.random() - 0.5))`.
-- HELB mode badge: change balance source from "cash type accounts" to **sum of accounts whose name matches `M-Pesa` or `KCB` (case-insensitive)**. Thresholds unchanged.
-
-No DB changes.
-
----
-
-## Module 3 — Smarter M-Pesa parser
-
-Edit `supabase/functions/parse-mpesa/index.ts`:
-- Update system prompt so the model extracts: `amount`, `subtype` (expense|income|transfer|loan|receivable|repayment), `source_account_hint`, `dest_account_hint`, `counterparty`, `purpose`, `pending` boolean, `mpesa_ref`, `occurred_at`.
-- Output shape: array of `legs` where transfers produce two legs (debit + credit) linked by shared ref; receivables produce a single `pending` leg with no balance impact (status=pending); loans produce inflow leg + note.
-- Account routing: resolve `source_account_hint`/`dest_account_hint` against the user's accounts by case-insensitive name match (M-Pesa, KCB, Ziidi, Cash). Fall back to M-Pesa for ambiguous inflows.
-
-Update `src/pages/ImportSMS.tsx`:
-- Preview card now shows: amount, subtype, source account, dest account (with arrow for transfers), counterparty, purpose, pending flag.
-- Each field editable inline before save.
-- On save: insert with `status` (pending|completed) and `metadata` carrying counterparty/purpose/subtype.
-
----
-
-## Module 4 — Categories: expanded seed + inline create
-
-### Migration
-Replace `ensure_user_categories()` body to seed the larger base list:
-Food & Drinks, Transport, Rent, Airtime & Data, Savings, Entertainment, Health, Clothing, Education, Business, Loan Repayment, Receivable, Transfer, Salary, Gift, Utilities, Shopping, Fees & Charges, Investment, Miscellaneous.
-Uses existing `ON CONFLICT (user_id, name) DO NOTHING` so re-running is safe and existing users get the new ones on next call.
-
-### UI
-In `QuickAddTransaction.tsx` category Select: add an "+ Create new…" option that opens an inline input. On Enter → insert into `categories` with chosen `kind`, refresh list, auto-select the new one.
-
----
-
-## Technical details
-
-### Files touched
-- **Migration 1**: alter transactions (status, completed_at) + replace `tg_apply_txn_to_balance`
-- **Migration 2**: replace `ensure_user_categories` with expanded seed
-- `src/hooks/useFinance.ts` — add `useMarkTransactionDone`
-- `src/pages/Transactions.tsx` — pending badge + mark-done button
-- `src/pages/Food.tsx` — budget input, shuffle fix, HELB balance source
-- `supabase/functions/parse-mpesa/index.ts` — richer extraction prompt + legs
-- `src/pages/ImportSMS.tsx` — editable preview, save with status/metadata
-- `src/components/QuickAddTransaction.tsx` — inline category create
-
-### Risks / called out
-- Changing the balance trigger is invasive. All existing rows are `'completed'` so behavior is identical for current data — only newly-inserted `pending` rows differ. I will keep the trigger SECURITY DEFINER and preserve transfer logic.
-- The parser changes are prompt-only on the AI side; legacy single-leg messages still work because transfer detection is opt-in based on the model output.
-
-### Out of scope (deferred)
-Meal log analytics, nutrition scoring, AI personalization, loan repayment schedule, counterparty analytics.
+### Out of scope
+- Reports page charts (can follow up if you want the same treatment).
+- New backend data or aggregations.

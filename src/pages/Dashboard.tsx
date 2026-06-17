@@ -1,11 +1,29 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useAccounts, useTransactions, useCategories } from "@/hooks/useFinance";
 import { formatKES } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { QuickAddTransaction } from "@/components/QuickAddTransaction";
 import { ArrowDownRight, ArrowUpRight, Wallet, TrendingUp, Landmark, HandCoins, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, Legend } from "recharts";
+import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell } from "recharts";
+
+const niceStep = (raw: number) => {
+  if (raw <= 0) return 1;
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const n = raw / pow;
+  const m = n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10;
+  return m * pow;
+};
+
+const kFmt = (v: number) => {
+  if (v === 0) return "0";
+  if (Math.abs(v) >= 1000) {
+    const k = v / 1000;
+    return `${Number.isInteger(k) ? k : k.toFixed(1)}k`;
+  }
+  return `${v}`;
+};
+
 
 const TYPE_META = {
   cash: { label: "Cash", icon: Wallet, color: "hsl(var(--primary))" },
@@ -51,12 +69,18 @@ const Dashboard = () => {
   }, [txns]);
 
   const cashFlowSeries = useMemo(() => {
-    const days: Record<string, { date: string; in: number; out: number }> = {};
+    const days: Record<string, { date: string; label: string; in: number; out: number; net: number }> = {};
     const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 29);
     for (let i = 0; i < 30; i++) {
       const d = new Date(cutoff); d.setDate(cutoff.getDate() + i);
       const k = d.toISOString().slice(0, 10);
-      days[k] = { date: k.slice(5), in: 0, out: 0 };
+      days[k] = {
+        date: k,
+        label: d.toLocaleDateString("en-KE", { month: "short", day: "2-digit" }),
+        in: 0,
+        out: 0,
+        net: 0,
+      };
     }
     txns.forEach((t) => {
       const k = new Date(t.occurred_at).toISOString().slice(0, 10);
@@ -65,23 +89,53 @@ const Dashboard = () => {
         if (a >= 0) days[k].in += a; else days[k].out += Math.abs(a);
       }
     });
-    return Object.values(days);
+    return Object.values(days).map((d) => ({ ...d, net: d.in - d.out }));
   }, [txns]);
 
-  const spendByCategory = useMemo(() => {
+  const flowMax = useMemo(
+    () => cashFlowSeries.reduce((m, d) => Math.max(m, d.in, d.out), 0),
+    [cashFlowSeries]
+  );
+  const hasFlow = flowMax > 0;
+
+  const [flowMode, setFlowMode] = useState<"all" | "in" | "out" | "net">("all");
+
+  const { topSpend, totalSpend } = useMemo(() => {
     const map = new Map<string, number>();
     const catName = (id: string | null) => cats.find((c) => c.id === id)?.name ?? "Uncategorized";
     txns.filter((t) => Number(t.amount) < 0).forEach((t) => {
       const k = catName(t.category_id);
       map.set(k, (map.get(k) ?? 0) + Math.abs(Number(t.amount)));
     });
-    return Array.from(map.entries())
+    const all = Array.from(map.entries())
       .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6);
+      .sort((a, b) => b.value - a.value);
+    const total = all.reduce((s, x) => s + x.value, 0);
+    const top = all.slice(0, 5);
+    const restSum = all.slice(5).reduce((s, x) => s + x.value, 0);
+    if (restSum > 0) top.push({ name: "Other", value: restSum });
+    return { topSpend: top, totalSpend: total };
   }, [txns, cats]);
 
-  const pieColors = ["hsl(158 70% 48%)", "hsl(180 70% 50%)", "hsl(38 92% 55%)", "hsl(280 70% 60%)", "hsl(340 70% 60%)", "hsl(220 12% 50%)"];
+  const pieColors = [
+    "hsl(var(--inflow))",
+    "hsl(180 70% 50%)",
+    "hsl(var(--warning))",
+    "hsl(265 70% 62%)",
+    "hsl(var(--outflow))",
+    "hsl(220 12% 50%)",
+  ];
+
+  // Y-axis ticks: clean, non-duplicated, rounded to nice numbers
+  const yTicks = useMemo(() => {
+    if (flowMax <= 0) return [0, 250, 500, 750, 1000];
+    const step = niceStep(flowMax / 4);
+    const top = Math.ceil(flowMax / step) * step;
+    const ticks: number[] = [];
+    for (let v = 0; v <= top; v += step) ticks.push(v);
+    return ticks;
+  }, [flowMax]);
+
 
   if (aL || tL) {
     return <div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
@@ -168,45 +222,180 @@ const Dashboard = () => {
       {/* Charts */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="border-border/60 p-4 lg:col-span-2">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-sm font-medium">Cash flow — last 30 days</h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-display text-sm font-medium">Cash flow</h2>
+              <p className="text-xs text-muted-foreground">Last 30 days</p>
+            </div>
+            <div className="inline-flex rounded-md border border-border/60 bg-card p-0.5 text-xs">
+              {(["all", "in", "out", "net"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setFlowMode(m)}
+                  className={`rounded-[5px] px-2.5 py-1 capitalize transition ${
+                    flowMode === m
+                      ? "bg-secondary text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {m === "in" ? "In" : m === "out" ? "Out" : m}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="h-64">
-            <ResponsiveContainer>
-              <LineChart data={cashFlowSeries}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip
-                  contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
-                  formatter={(v: number) => formatKES(v)}
-                />
-                <Line type="monotone" dataKey="in" stroke="hsl(var(--inflow))" strokeWidth={2} dot={false} name="Inflow" />
-                <Line type="monotone" dataKey="out" stroke="hsl(var(--outflow))" strokeWidth={2} dot={false} name="Outflow" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        <Card className="border-border/60 p-4">
-          <h2 className="mb-3 font-display text-sm font-medium">Top spending categories</h2>
-          {spendByCategory.length === 0 ? (
-            <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">No expense data yet</div>
+          {!hasFlow ? (
+            <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground md:h-64">
+              No cash flow in the last 30 days
+            </div>
           ) : (
-            <div className="h-64">
+            <div className="h-[220px] md:h-64">
               <ResponsiveContainer>
-                <PieChart>
-                  <Pie data={spendByCategory} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} paddingAngle={2}>
-                    {spendByCategory.map((_, i) => <Cell key={i} fill={pieColors[i % pieColors.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v: number) => formatKES(v)} contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                </PieChart>
+                <AreaChart data={cashFlowSeries} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gradIn" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(var(--inflow))" stopOpacity={0.45} />
+                      <stop offset="100%" stopColor="hsl(var(--inflow))" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gradOut" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(var(--outflow))" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="hsl(var(--outflow))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                  <XAxis
+                    dataKey="label"
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={10}
+                    tickLine={false}
+                    axisLine={false}
+                    interval={Math.floor(cashFlowSeries.length / 5)}
+                    minTickGap={16}
+                  />
+                  <YAxis
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={10}
+                    tickLine={false}
+                    axisLine={false}
+                    width={42}
+                    ticks={yTicks}
+                    domain={[0, yTicks[yTicks.length - 1]]}
+                    tickFormatter={kFmt}
+                  />
+                  <Tooltip
+                    cursor={{ stroke: "hsl(var(--border))", strokeWidth: 1 }}
+                    contentStyle={{
+                      background: "hsl(var(--popover))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                    labelFormatter={(l) => <span className="font-medium">{l}</span>}
+                    formatter={(v: number, name) => [formatKES(v), name]}
+                  />
+                  {(flowMode === "all" || flowMode === "in") && (
+                    <Area
+                      type="monotone"
+                      dataKey="in"
+                      name="Inflow"
+                      stroke="hsl(var(--inflow))"
+                      strokeWidth={2}
+                      fill="url(#gradIn)"
+                      isAnimationActive={false}
+                    />
+                  )}
+                  {(flowMode === "all" || flowMode === "out") && (
+                    <Area
+                      type="monotone"
+                      dataKey="out"
+                      name="Outflow"
+                      stroke="hsl(var(--outflow))"
+                      strokeWidth={2}
+                      fill="url(#gradOut)"
+                      isAnimationActive={false}
+                    />
+                  )}
+                  {flowMode === "net" && (
+                    <Area
+                      type="monotone"
+                      dataKey="net"
+                      name="Net"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      fill="hsl(var(--primary) / 0.15)"
+                      isAnimationActive={false}
+                    />
+                  )}
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           )}
         </Card>
+
+        <Card className="border-border/60 p-4">
+          <div className="mb-3">
+            <h2 className="font-display text-sm font-medium">Top spending categories</h2>
+            <p className="text-xs text-muted-foreground">All time</p>
+          </div>
+          {topSpend.length === 0 ? (
+            <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
+              No expense data yet
+            </div>
+          ) : (
+            <>
+              <div className="relative h-[200px]">
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie
+                      data={topSpend}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={58}
+                      outerRadius={84}
+                      paddingAngle={2}
+                      stroke="hsl(var(--card))"
+                      strokeWidth={2}
+                      isAnimationActive={false}
+                    >
+                      {topSpend.map((_, i) => (
+                        <Cell key={i} fill={pieColors[i % pieColors.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(v: number) => formatKES(v)}
+                      contentStyle={{
+                        background: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Total</div>
+                  <div className="font-mono-figure text-base font-semibold">{formatKES(totalSpend)}</div>
+                </div>
+              </div>
+              <ul className="mt-3 grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
+                {topSpend.map((s, i) => {
+                  const pct = totalSpend > 0 ? (s.value / totalSpend) * 100 : 0;
+                  return (
+                    <li key={s.name} className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+                        style={{ background: pieColors[i % pieColors.length] }}
+                      />
+                      <span className="truncate flex-1">{s.name}</span>
+                      <span className="font-mono-figure text-muted-foreground">{pct.toFixed(0)}%</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </Card>
       </div>
+
 
       {/* Recent transactions */}
       <Card className="border-border/60 p-4">

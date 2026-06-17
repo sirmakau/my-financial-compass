@@ -1,11 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useAccounts, useTransactions, useCategories } from "@/hooks/useFinance";
 import { formatKES } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { QuickAddTransaction } from "@/components/QuickAddTransaction";
 import { ArrowDownRight, ArrowUpRight, Wallet, TrendingUp, Landmark, HandCoins, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, Legend } from "recharts";
+import { AreaChart, Area, LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell } from "recharts";
+
 
 const TYPE_META = {
   cash: { label: "Cash", icon: Wallet, color: "hsl(var(--primary))" },

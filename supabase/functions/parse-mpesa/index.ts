@@ -107,7 +107,16 @@ Deno.serve(async (req) => {
       ? categories.filter((c) => typeof c === "string")
       : ["Other"];
 
-    const userPrompt = `Available categories: ${cats.join(", ")}\n\nRaw M-Pesa messages (may be multiple, separated by blank lines or newlines):\n\n${messages}`;
+    // Build learning context from the user's past confirmed transactions.
+    const learningContext = await buildLearningContext(req.headers.get("Authorization"));
+
+    const userPrompt = `Available categories: ${cats.join(", ")}
+
+${learningContext}
+
+Raw M-Pesa messages (may be multiple, separated by blank lines or newlines):
+
+${messages}`;
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -115,6 +124,7 @@ Deno.serve(async (req) => {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
+
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [

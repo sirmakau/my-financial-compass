@@ -57,14 +57,42 @@ NON-NEGOTIABLE ACCOUNTING RULES:
    - dest_account_hint   : for transfers, the TO account name.
    - Recognize aliases: "mpesa"/"m-pesa" → mpesa; "kcb"/"kcb m-pesa" → kcb; "ziidi"/"savings ziidi" → ziidi; "cash"/"withdrawn"→cash; "fuliza" → fuliza.
 
-4. FULIZA = DEBT ACCOUNT — use DOUBLE-ENTRY:
-   - Fuliza top-up of a payment shortfall: emit BOTH the M-Pesa cash leg (target=mpesa, NEGATIVE) AND the fuliza debt leg (target=fuliza, type=fuliza_borrow, NEGATIVE, subtype=loan).
-   - Fuliza access fee: SEPARATE row, target=fuliza, type=fee, NEGATIVE, suggested_category="Fees & Charges".
-   - Auto-repay of Fuliza from inflow: emit receive (target=mpesa, POSITIVE) AND fuliza_repay (target=fuliza, POSITIVE, subtype=repayment).
+4. FULIZA = AUTOMATED DEBT ACCOUNT (CRITICAL — DO NOT DOUBLE-ENTRY):
+   A database trigger automatically maintains the Fuliza debt balance whenever the M-Pesa
+   cash balance crosses zero. Therefore the parser MUST NOT emit fuliza_borrow or
+   fuliza_repay rows for the debt leg — emitting them would double-count.
 
-5. RECEIVABLES — pending=true means "this transaction is recorded but NOT yet completed". Importer will save it with status='pending' so it does NOT affect the balance until user marks it done.
+   Rules:
+   - "Fuliza M-PESA amount is Ksh X. ... Total Fuliza M-PESA outstanding amount is Ksh Y"
+     → this is the FOLLOW-UP NOTICE for the immediately preceding M-Pesa payment SMS
+       (they share the same confirmation ref, e.g. "UFMR58LZ55"). Do NOT emit a debt
+       row. Instead, on the paired M-Pesa cash row capture fuliza_outstanding=Y and add
+       notes like "Fuliza covered Ksh X". The trigger will create the debt audit row.
+   - Fuliza ACCESS FEE ("Access Fee charged Ksh 0.65") → emit ONE row:
+       target=mpesa, type=fee, subtype=expense, amount=-0.65,
+       suggested_category="Fees & Charges", counterparty="Safaricom Fuliza".
+     (The fee debits M-Pesa, not Fuliza; the trigger will overdraw Fuliza if needed.)
+   - "Ksh X from your M-PESA has been used to partially pay your outstanding Fuliza"
+     → this is a STANDALONE notification that money already on M-Pesa was swept to
+       Fuliza. Do NOT emit either leg — the trigger has already produced both rows from
+       the inflow that caused the surplus. Skip the row and add a warning
+       "Fuliza auto-repay notice (handled by trigger): Ksh X".
+   - "You have received Ksh X from <name>" → emit ONE inflow row on M-Pesa
+       (target=mpesa, type=receive, subtype=income, amount=+X). Even if a Fuliza
+       auto-repay SMS follows, do NOT add a repayment row — the trigger handles it.
 
-6. FEES are ALWAYS SEPARATE rows with suggested_category="Fees & Charges" and NEGATIVE amount.
+5. SMS PAIRING — many M-Pesa events arrive as 2–3 separate SMS sharing the same ref
+   code (e.g. UFMR58LZ55):
+     a) the cash payment ("Ksh 65 paid to JACKSON MWAURA")
+     b) the Fuliza coverage notice (same ref)
+     c) optionally a Fuliza access fee
+   Always link rows with the same ref. Emit only ONE cash leg per ref; subsequent
+   Fuliza-flavoured SMS for that ref must NOT create additional balance-changing rows
+   (only the fee, which uses the same ref + "-FEE" suffix).
+
+6. RECEIVABLES — pending=true means "this transaction is recorded but NOT yet completed". Importer will save it with status='pending' so it does NOT affect the balance until user marks it done.
+
+7. FEES are ALWAYS SEPARATE rows with suggested_category="Fees & Charges" and NEGATIVE amount.
 
 EXTRACTION REQUIREMENTS (per row):
 - mpesa_ref: M-Pesa confirmation code. For transfer-in legs, suffix "-IN" (e.g. "QABC123-IN"). For pure intent messages with no code, generate one based on hash of message (e.g. "INTENT-<8chars>").

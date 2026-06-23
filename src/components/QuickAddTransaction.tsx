@@ -57,7 +57,7 @@ export const QuickAddTransaction = ({ trigger }: { trigger?: React.ReactNode }) 
       toast.success("Transaction added");
       form.reset({
         direction: "out",
-        occurred_at: new Date().toISOString().slice(0, 16),
+        occurred_at: toLocalInputValue(),
         amount: 0,
       });
       setOpen(false);

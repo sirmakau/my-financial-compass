@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.tg_auto_fuliza_balance() FROM PUBLIC, anon, authenticated;

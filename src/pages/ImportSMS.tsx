@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAccounts, useCategories, useCreateTransactionsBatch } from "@/hooks/useFinance";
-import { formatKES } from "@/lib/format";
+import { formatKES, isoToLocalInputValue } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -363,7 +363,7 @@ const ImportSMS = () => {
                     </td>
                     <td className="px-3 py-2">
                       <Input type="datetime-local" className="h-8 w-44 text-xs"
-                        value={r.occurred_at.slice(0, 16)}
+                        value={isoToLocalInputValue(r.occurred_at)}
                         onChange={(e) => update(r._id, { occurred_at: new Date(e.target.value).toISOString() })} />
                     </td>
                     <td className="px-3 py-2">

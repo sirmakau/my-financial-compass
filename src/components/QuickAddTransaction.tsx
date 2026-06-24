@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAccounts, useCategories, useCreateTransaction, useCreateCategory } from "@/hooks/useFinance";
 import { Plus, Loader2, PlusCircle } from "lucide-react";
 import { toast } from "sonner";
-import { toLocalInputValue } from "@/lib/format";
 
 const schema = z.object({
   account_id: z.string().uuid("Select an account"),
@@ -38,7 +37,7 @@ export const QuickAddTransaction = ({ trigger }: { trigger?: React.ReactNode }) 
     resolver: zodResolver(schema),
     defaultValues: {
       direction: "out",
-      occurred_at: toLocalInputValue(),
+      occurred_at: new Date().toISOString().slice(0, 16),
       amount: 0,
     },
   });
@@ -57,7 +56,7 @@ export const QuickAddTransaction = ({ trigger }: { trigger?: React.ReactNode }) 
       toast.success("Transaction added");
       form.reset({
         direction: "out",
-        occurred_at: toLocalInputValue(),
+        occurred_at: new Date().toISOString().slice(0, 16),
         amount: 0,
       });
       setOpen(false);

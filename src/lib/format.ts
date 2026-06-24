@@ -17,14 +17,3 @@ export const formatDate = (iso: string) =>
 
 export const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString("en-KE", { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
-
-// Returns "YYYY-MM-DDTHH:mm" in the user's LOCAL timezone (Kenya = EAT, UTC+3)
-// for use as the value of <input type="datetime-local">. Using toISOString()
-// would yield UTC and display 3 hours behind local time.
-export const toLocalInputValue = (d: Date = new Date()) => {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
-
-// Convert an ISO/UTC datetime string to a local datetime-local input value.
-export const isoToLocalInputValue = (iso: string) => toLocalInputValue(new Date(iso));

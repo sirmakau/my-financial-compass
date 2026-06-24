@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAccounts, useCategories, useCreateTransaction, useCreateCategory } from "@/hooks/useFinance";
 import { Plus, Loader2, PlusCircle } from "lucide-react";
 import { toast } from "sonner";
+import { toLocalInputValue } from "@/lib/format";
 
 const schema = z.object({
   account_id: z.string().uuid("Select an account"),

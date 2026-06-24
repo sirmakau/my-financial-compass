@@ -38,7 +38,7 @@ export const QuickAddTransaction = ({ trigger }: { trigger?: React.ReactNode }) 
     resolver: zodResolver(schema),
     defaultValues: {
       direction: "out",
-      occurred_at: new Date().toISOString().slice(0, 16),
+      occurred_at: toLocalInputValue(),
       amount: 0,
     },
   });

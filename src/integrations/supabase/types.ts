@@ -286,7 +286,7 @@ export type Database = {
     Enums: {
       account_type: "cash" | "investment" | "debt" | "receivable"
       category_kind: "income" | "expense" | "transfer"
-      txn_source: "manual" | "parsed" | "ai_assisted" | "import"
+      txn_source: "manual" | "parsed" | "ai_assisted" | "import" | "auto-fuliza"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -416,7 +416,7 @@ export const Constants = {
     Enums: {
       account_type: ["cash", "investment", "debt", "receivable"],
       category_kind: ["income", "expense", "transfer"],
-      txn_source: ["manual", "parsed", "ai_assisted", "import"],
+      txn_source: ["manual", "parsed", "ai_assisted", "import", "auto-fuliza"],
     },
   },
 } as const

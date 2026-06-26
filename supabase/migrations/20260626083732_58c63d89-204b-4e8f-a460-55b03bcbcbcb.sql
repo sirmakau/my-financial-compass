@@ -1,0 +1,1 @@
+ALTER TYPE public.txn_source ADD VALUE IF NOT EXISTS 'auto-fuliza';

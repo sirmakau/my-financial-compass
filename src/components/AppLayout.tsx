@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { LayoutDashboard, Wallet, ArrowLeftRight, MessageSquareText, LogOut, Sparkles, BarChart3, Utensils } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { BackendStatusPill } from "@/components/BackendStatusPill";
 
 const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -45,7 +46,10 @@ export const AppLayout = () => {
           ))}
         </nav>
         <div className="border-t border-sidebar-border p-3">
-          <div className="mb-2 truncate px-2 text-xs text-muted-foreground">{user?.email}</div>
+          <div className="mb-2 flex items-center justify-between gap-2 px-2">
+            <div className="min-w-0 truncate text-xs text-muted-foreground">{user?.email}</div>
+            <BackendStatusPill />
+          </div>
           <Button
             variant="ghost"
             size="sm"
@@ -65,9 +69,12 @@ export const AppLayout = () => {
           </div>
           <span className="font-display font-semibold">Ledger</span>
         </div>
-        <Button variant="ghost" size="sm" onClick={async () => { await signOut(); nav("/auth"); }}>
-          <LogOut className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <BackendStatusPill />
+          <Button variant="ghost" size="sm" onClick={async () => { await signOut(); nav("/auth"); }}>
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </div>
       </header>
 
       <main className="lg:pl-60">

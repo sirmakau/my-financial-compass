@@ -176,13 +176,26 @@ export const useCreateTransaction = () => {
   return useMutation({
     mutationFn: async (input: TxnInput) => {
       if (!user) throw new Error("Not authenticated");
-      const { data, error } = await supabase
-        .from("transactions")
-        .insert({ user_id: user.id, source: "manual", ...input })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const row = { user_id: user.id, source: "manual" as TxnSource, ...input };
+      try {
+        const { data, error } = await supabase.from("transactions").insert(row).select().single();
+        if (error) throw error;
+        return data;
+      } catch (err) {
+        if (!isNetworkError(err)) throw err;
+        const entry = outbox.enqueue(user.id, { userId: user.id, kind: "insert", table: "transactions", payload: row });
+        // Optimistic cache row
+        const optimistic: any = {
+          id: entry.id,
+          created_at: new Date().toISOString(),
+          completed_at: input.status === "pending" ? null : new Date().toISOString(),
+          status: input.status ?? "completed",
+          _pending: true,
+          ...row,
+        };
+        qc.setQueriesData({ queryKey: ["transactions"] }, (old: any) => (Array.isArray(old) ? [optimistic, ...old] : old));
+        return optimistic;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });
@@ -198,9 +211,45 @@ export const useCreateTransactionsBatch = () => {
     mutationFn: async (rows: TxnInput[]) => {
       if (!user) throw new Error("Not authenticated");
       const payload = rows.map((r) => ({ user_id: user.id, source: "parsed" as TxnSource, ...r }));
-      const { data, error } = await supabase.from("transactions").insert(payload).select();
-      if (error) throw error;
-      return data;
+      try {
+        const { data, error } = await supabase.from("transactions").insert(payload).select();
+        if (error) throw error;
+        return data;
+      } catch (err) {
+        if (!isNetworkError(err)) throw err;
+        outbox.enqueue(user.id, { userId: user.id, kind: "insert", table: "transactions", payload });
+        return payload;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+      qc.invalidateQueries({ queryKey: ["accounts"] });
+    },
+  });
+};
+
+export const useUpdateTransaction = () => {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (input: { id: string; patch: Partial<Transaction> }) => {
+      if (!user) throw new Error("Not authenticated");
+      // Optimistic
+      qc.setQueriesData({ queryKey: ["transactions"] }, (old: any) =>
+        Array.isArray(old) ? old.map((t) => (t.id === input.id ? { ...t, ...input.patch } : t)) : old,
+      );
+      try {
+        const { error } = await supabase.from("transactions").update(input.patch as any).eq("id", input.id);
+        if (error) throw error;
+      } catch (err) {
+        if (!isNetworkError(err)) throw err;
+        outbox.enqueue(user.id, {
+          userId: user.id,
+          kind: "update",
+          table: "transactions",
+          payload: { match: { id: input.id }, patch: input.patch },
+        });
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });
@@ -211,10 +260,25 @@ export const useCreateTransactionsBatch = () => {
 
 export const useDeleteTransaction = () => {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("transactions").delete().eq("id", id);
-      if (error) throw error;
+      // Optimistic remove
+      qc.setQueriesData({ queryKey: ["transactions"] }, (old: any) =>
+        Array.isArray(old) ? old.filter((t: any) => t.id !== id) : old,
+      );
+      // If it's a local-only row, just drop the outbox insert if present.
+      if (id.startsWith("local-") && user) {
+        outbox.remove(user.id, id);
+        return;
+      }
+      try {
+        const { error } = await supabase.from("transactions").delete().eq("id", id);
+        if (error) throw error;
+      } catch (err) {
+        if (!isNetworkError(err) || !user) throw err;
+        outbox.enqueue(user.id, { userId: user.id, kind: "delete", table: "transactions", payload: { id } });
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });
@@ -225,13 +289,20 @@ export const useDeleteTransaction = () => {
 
 export const useMarkTransactionDone = () => {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("transactions")
-        .update({ status: "completed", completed_at: new Date().toISOString() })
-        .eq("id", id);
-      if (error) throw error;
+      const patch = { status: "completed" as const, completed_at: new Date().toISOString() };
+      qc.setQueriesData({ queryKey: ["transactions"] }, (old: any) =>
+        Array.isArray(old) ? old.map((t: any) => (t.id === id ? { ...t, ...patch } : t)) : old,
+      );
+      try {
+        const { error } = await supabase.from("transactions").update(patch).eq("id", id);
+        if (error) throw error;
+      } catch (err) {
+        if (!isNetworkError(err) || !user) throw err;
+        outbox.enqueue(user.id, { userId: user.id, kind: "update", table: "transactions", payload: { match: { id }, patch } });
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });

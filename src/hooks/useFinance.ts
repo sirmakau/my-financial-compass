@@ -2,6 +2,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/integrations/supabase/types";
+import { outbox } from "@/lib/outbox";
+
+const isNetworkError = (err: unknown) => {
+  const msg = (err as any)?.message ?? String(err ?? "");
+  return /Failed to fetch|NetworkError|network|timeout|abort|fetch|ECONN|503|502|504/i.test(msg)
+    || (typeof navigator !== "undefined" && navigator.onLine === false);
+};
 
 export type Account = Database["public"]["Tables"]["accounts"]["Row"];
 export type Category = Database["public"]["Tables"]["categories"]["Row"];

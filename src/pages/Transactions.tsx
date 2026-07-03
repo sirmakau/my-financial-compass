@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useAccounts, useCategories, useTransactions, useDeleteTransaction, useMarkTransactionDone } from "@/hooks/useFinance";
+import { useAccounts, useCategories, useTransactions, useDeleteTransaction, useMarkTransactionDone, useUpdateTransaction } from "@/hooks/useFinance";
 import { formatKES, formatDateTime } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,8 @@ const Transactions = () => {
   const { data: cats = [] } = useCategories();
   const del = useDeleteTransaction();
   const markDone = useMarkTransactionDone();
+  const update = useUpdateTransaction();
+  const [editingAmount, setEditingAmount] = useState<{ id: string; value: string } | null>(null);
 
   const [q, setQ] = useState("");
   const [accountId, setAccountId] = useState<string>("all");
@@ -162,8 +164,10 @@ const Transactions = () => {
                 {pageItems.map((t) => {
                   const a = Number(t.amount);
                   const isPending = (t as any).status === "pending";
+                  const isSyncing = (t as any)._pending === true;
+                  const isEditingAmt = editingAmount?.id === t.id;
                   return (
-                    <tr key={t.id} className="hover:bg-secondary/20">
+                    <tr key={t.id} className={`hover:bg-secondary/20 ${isSyncing ? "opacity-80" : ""}`}>
                       <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{formatDateTime(t.occurred_at)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -173,15 +177,75 @@ const Transactions = () => {
                               Pending
                             </Badge>
                           )}
+                          {isSyncing && (
+                            <span
+                              title="Waiting to sync"
+                              className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400"
+                            />
+                          )}
                         </div>
                         {t.counterparty && t.description && <div className="text-xs text-muted-foreground">{t.description}</div>}
                         {t.mpesa_ref && <div className="mt-0.5 font-mono-figure text-[10px] text-muted-foreground">{t.mpesa_ref}</div>}
                       </td>
                       <td className="px-4 py-3 text-xs">{accountName(t.account_id)}</td>
-                      <td className="px-4 py-3 text-xs">{categoryName(t.category_id)}</td>
+                      <td className="px-4 py-3 text-xs">
+                        <Select
+                          value={t.category_id ?? "__none__"}
+                          onValueChange={async (v) => {
+                            const next = v === "__none__" ? null : v;
+                            if (next === t.category_id) return;
+                            try {
+                              await update.mutateAsync({ id: t.id, patch: { category_id: next } as any });
+                            } catch (e) {
+                              toast.error((e as Error).message);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-7 w-36 border-transparent bg-transparent px-2 text-xs hover:border-border">
+                            <SelectValue placeholder="Uncategorized" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Uncategorized</SelectItem>
+                            {cats.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </td>
                       <td className="px-4 py-3"><Badge variant="outline" className="text-[10px] capitalize">{t.source}</Badge></td>
                       <td className={`whitespace-nowrap px-4 py-3 text-right font-mono-figure font-medium ${a >= 0 ? "text-inflow" : "text-outflow"}`}>
-                        {formatKES(a, { signed: true })}
+                        {isEditingAmt ? (
+                          <Input
+                            autoFocus
+                            type="number"
+                            step="0.01"
+                            className="h-7 w-28 text-right font-mono-figure"
+                            value={editingAmount.value}
+                            onChange={(e) => setEditingAmount({ id: t.id, value: e.target.value })}
+                            onBlur={async () => {
+                              const next = Number(editingAmount.value);
+                              setEditingAmount(null);
+                              if (!Number.isFinite(next) || next === a) return;
+                              try {
+                                await update.mutateAsync({ id: t.id, patch: { amount: next } as any });
+                                toast.success("Amount updated");
+                              } catch (e) {
+                                toast.error((e as Error).message);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                              if (e.key === "Escape") setEditingAmount(null);
+                            }}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className="rounded px-1 hover:bg-secondary/40"
+                            onClick={() => setEditingAmount({ id: t.id, value: String(a) })}
+                            title="Click to edit"
+                          >
+                            {formatKES(a, { signed: true })}
+                          </button>
+                        )}
                       </td>
                       <td className="px-2 py-3">
                         <div className="flex items-center justify-end gap-1">

@@ -3,6 +3,8 @@ import { LayoutDashboard, Wallet, ArrowLeftRight, MessageSquareText, LogOut, Spa
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { BackendStatusPill } from "@/components/BackendStatusPill";
+import { ThemeToggle } from "@/components/ThemeToggle";
+
 
 const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },

@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAccounts, useCategories, useCreateTransactionsBatch } from "@/hooks/useFinance";
 import { formatKES, isoToLocalInputValue } from "@/lib/format";
+import { extractFulizaBatch, impliedOutstanding, reconcileFuliza, FULIZA_TOLERANCE } from "@/lib/fuliza";
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";

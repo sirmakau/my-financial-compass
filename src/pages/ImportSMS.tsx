@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAccounts, useCategories, useCreateTransactionsBatch } from "@/hooks/useFinance";
 import { formatKES, isoToLocalInputValue } from "@/lib/format";
+import { extractFulizaBatch, impliedOutstanding, reconcileFuliza, FULIZA_TOLERANCE } from "@/lib/fuliza";
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,8 +14,6 @@ import { Badge } from "@/components/ui/badge";
 import { Sparkles, Loader2, AlertCircle, Check, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
-// Tolerance (KES) for matching SMS "Total Fuliza outstanding" with our computed debt.
-const FULIZA_TOLERANCE = 1.0;
 
 interface ParsedTxn {
   mpesa_ref: string | null;
@@ -190,30 +190,39 @@ const ImportSMS = () => {
     setRows((rs) => rs.map((r) => (r._id === id ? { ...r, ...patch } : r)));
 
   // Reconcile SMS-reported "Total Fuliza outstanding" vs our computed debt.
-  // Computed outstanding = current debt + (borrows added) - (repays applied) for included rows.
-  // On the fuliza account, debt is stored as NEGATIVE balance, borrows are negative amounts,
-  // repays are positive amounts. So: outstanding = -(balance + sum(included fuliza amounts)).
+  // Runs on every import: the reported figure comes from the parsed rows when available,
+  // otherwise it is read straight out of the pasted SMS text (explicit total, or limit − available).
   const fulizaCheck = useMemo(() => {
     const fulizaRows = rows.filter((r) => r.include && r.target === "fuliza");
-    if (fulizaRows.length === 0) return null;
 
-    // Latest reported outstanding from the SMS batch (use the max fuliza_outstanding present —
-    // multiple split rows from one SMS share the same value; multiple SMS use the latest by time).
-    const reportedRows = fulizaRows.filter((r) => typeof r.fuliza_outstanding === "number" && r.fuliza_outstanding !== null);
-    if (reportedRows.length === 0) return null;
-    const latest = [...reportedRows].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)).pop()!;
-    const reported = Number(latest.fuliza_outstanding);
+    // Preferred source: the AI-extracted outstanding on the latest fuliza row.
+    const reportedRows = fulizaRows.filter(
+      (r) => typeof r.fuliza_outstanding === "number" && r.fuliza_outstanding !== null,
+    );
+    const latest = [...reportedRows].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)).pop();
 
-    const currentDebt = fulizaAccount ? -Number(fulizaAccount.balance ?? 0) : 0;
-    // Only count fuliza-target rows up to and including the latest reported SMS time.
-    const applied = fulizaRows
-      .filter((r) => r.occurred_at <= latest.occurred_at)
-      .reduce((s, r) => s + Number(r.amount), 0);
-    const computed = Math.max(0, currentDebt - applied); // -applied because borrows are negative
-    const diff = +(computed - reported).toFixed(2);
-    const mismatch = Math.abs(diff) > FULIZA_TOLERANCE;
-    return { reported, computed: +computed.toFixed(2), diff, mismatch, hasAccount: !!fulizaAccount };
-  }, [rows, fulizaAccount]);
+    let reported: number | null = latest ? Number(latest.fuliza_outstanding) : null;
+    let applied: number[] = latest
+      ? fulizaRows.filter((r) => r.occurred_at <= latest.occurred_at).map((r) => Number(r.amount))
+      : [];
+
+    // Fallback: read the outstanding directly from the raw pasted SMS.
+    if (reported === null) {
+      const facts = extractFulizaBatch(text);
+      const withTotal = [...facts].reverse().find((f) => impliedOutstanding(f) !== null);
+      if (!withTotal) return null;
+      reported = impliedOutstanding(withTotal)!;
+      applied = fulizaRows.map((r) => Number(r.amount));
+    }
+
+    return reconcileFuliza({
+      fulizaBalance: fulizaAccount ? Number(fulizaAccount.balance ?? 0) : null,
+      appliedAmounts: applied,
+      reportedOutstanding: reported,
+      tolerance: FULIZA_TOLERANCE,
+    });
+  }, [rows, fulizaAccount, text]);
+
 
   const [fulizaAck, setFulizaAck] = useState(false);
 

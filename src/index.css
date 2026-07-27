@@ -28,6 +28,12 @@
     --ring: 158 64% 42%;
     --radius: 0.625rem;
 
+    --gradient-primary: linear-gradient(135deg, hsl(158 64% 42%), hsl(180 64% 40%));
+    --gradient-surface: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 20% 97%));
+    --shadow-glow: 0 0 40px -12px hsl(158 64% 42% / 0.28);
+    --shadow-card: 0 4px 20px -10px hsl(222 40% 40% / 0.25);
+
+
     --success: 158 64% 42%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
@@ -45,9 +51,9 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-  /* App is dark by default — financial-analyst aesthetic */
-  :root,
+  /* Dark theme — applied when the device (or the user) prefers dark */
   .dark {
+
     --background: 222 28% 7%;
     --foreground: 210 20% 96%;
 

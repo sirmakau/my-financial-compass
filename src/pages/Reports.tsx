@@ -4,7 +4,7 @@ import { formatKES } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, TrendingUp } from "lucide-react";
 
 const Reports = () => {
   const { data: accounts = [], isLoading: aL } = useAccounts();
@@ -108,7 +108,7 @@ const Reports = () => {
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-display text-sm font-medium">AI Insights</h2>
           <Button size="sm" onClick={handleGenerateInsights} disabled={generate.isPending} className="gap-1.5">
-            {generate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {generate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
             Generate
           </Button>
         </div>
@@ -118,7 +118,7 @@ const Reports = () => {
           <ul className="space-y-2">
             {insights.map((insight, i) => (
               <li key={i} className="flex items-start gap-2 text-sm">
-                <Sparkles className="mt-0.5 h-4 w-4 text-primary" />
+                <TrendingUp className="mt-0.5 h-4 w-4 text-primary" />
                 {insight}
               </li>
             ))}

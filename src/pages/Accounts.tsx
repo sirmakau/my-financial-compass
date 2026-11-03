@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Loader2, Wallet, TrendingUp, Landmark, HandCoins, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import { ResetBalances } from "@/components/ResetBalances";
 
 const ICONS: Record<AccountType, React.ComponentType<{ className?: string }>> = {
   cash: Wallet, investment: TrendingUp, debt: Landmark, receivable: HandCoins,
@@ -82,6 +83,7 @@ const Accounts = () => {
             {ensureCats.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
             Verify categories
           </Button>
+          <ResetBalances />
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> New account</Button>

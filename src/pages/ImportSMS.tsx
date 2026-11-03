@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Loader2, AlertCircle, Check, X, AlertTriangle } from "lucide-react";
+import { TrendingUp, Loader2, AlertCircle, Check, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 
@@ -264,7 +264,7 @@ const ImportSMS = () => {
               </Select>
             </div>
             <Button onClick={parse} disabled={parsing} className="w-full gap-2">
-              {parsing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {parsing ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
               Parse with AI
             </Button>
             <Button variant="ghost" size="sm" className="w-full" onClick={() => setText(SAMPLE)}>

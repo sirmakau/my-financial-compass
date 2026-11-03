@@ -221,6 +221,54 @@ export type Database = {
         }
         Relationships: []
       }
+      sms_inbox: {
+        Row: {
+          body: string
+          id: string
+          processed_at: string | null
+          received_at: string
+          sender: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          id?: string
+          processed_at?: string | null
+          received_at?: string
+          sender?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          id?: string
+          processed_at?: string | null
+          received_at?: string
+          sender?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sms_webhook_keys: {
+        Row: {
+          created_at: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          token: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          token?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           account_id: string

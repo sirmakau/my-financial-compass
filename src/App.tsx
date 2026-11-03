@@ -16,6 +16,7 @@ import Accounts from "./pages/Accounts";
 import Transactions from "./pages/Transactions";
 import ImportSMS from "./pages/ImportSMS";
 import Reports from "./pages/Reports";
+import Inbox from "./pages/Inbox";
 import Food from "./pages/Food";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -57,6 +58,7 @@ const App = () => (
                 <Route path="/import" element={<ImportSMS />} />
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/food" element={<Food />} />
+                <Route path="/inbox" element={<Inbox />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

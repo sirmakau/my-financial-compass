@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAccounts } from "@/hooks/useFinance";
 import { useCombos, useEnsureFoodSeed, useLogMealAsTxn, type ComboCategory, type MealCombo, type MealType } from "@/hooks/useFood";
-import { Utensils, Flame, Sparkles, Shuffle, AlertTriangle } from "lucide-react";
+import { Utensils, Flame, TrendingUp, Shuffle, AlertTriangle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const KES = (n: number) => `KES ${n.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
@@ -268,7 +268,7 @@ const Food = () => {
       <Dialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> {pending?.name}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-primary" /> {pending?.name}</DialogTitle>
             <DialogDescription>
               {pending && <>Cost <span className="font-semibold text-foreground">{KES(pending.cost)}</span> · {pending.items.join(", ")}</>}
               <br />Log this as an expense?

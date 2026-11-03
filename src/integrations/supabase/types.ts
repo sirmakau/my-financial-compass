@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_snapshots: {
+        Row: {
+          accounts_data: Json
+          id: string
+          note: string | null
+          snapshot_at: string
+          total_net_worth: number
+          user_id: string
+        }
+        Insert: {
+          accounts_data?: Json
+          id?: string
+          note?: string | null
+          snapshot_at?: string
+          total_net_worth?: number
+          user_id: string
+        }
+        Update: {
+          accounts_data?: Json
+          id?: string
+          note?: string | null
+          snapshot_at?: string
+          total_net_worth?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       accounts: {
         Row: {
           balance: number
@@ -278,6 +305,7 @@ export type Database = {
       ensure_all_users_categories: { Args: never; Returns: number }
       ensure_food_seed: { Args: { p_user_id?: string }; Returns: number }
       ensure_user_categories: { Args: { p_user_id?: string }; Returns: number }
+      reset_user_accounts: { Args: { p_note?: string }; Returns: string }
       seed_meal_combos_for_user: {
         Args: { p_user_id: string }
         Returns: number

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Sparkles, Loader2 } from "lucide-react";
+import { TrendingUp, Loader2 } from "lucide-react";
 
 const schema = z.object({
   email: z.string().trim().email("Invalid email").max(255),
@@ -65,7 +65,7 @@ const Auth = () => {
       <div className="relative w-full max-w-md">
         <div className="mb-8 flex items-center justify-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
-            <Sparkles className="h-5 w-5 text-primary-foreground" />
+            <TrendingUp className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
             <h1 className="font-display text-2xl font-semibold tracking-tight">Ledger</h1>

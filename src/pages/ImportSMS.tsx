@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAccounts, useCategories, useCreateTransactionsBatch } from "@/hooks/useFinance";
 import { formatKES, isoToLocalInputValue } from "@/lib/format";
@@ -52,6 +52,19 @@ const ImportSMS = () => {
   const batch = useCreateTransactionsBatch();
 
   const [text, setText] = useState("");
+  const [inboxIds, setInboxIds] = useState<string[]>([]);
+  useEffect(() => {
+    const ids = new URLSearchParams(window.location.search).get("inbox");
+    if (!ids) return;
+    const list = ids.split(",").filter(Boolean);
+    supabase.from("sms_inbox").select("id, body").in("id", list).then(({ data }) => {
+      if (data?.length) {
+        setText(data.map((d) => d.body).join("\n\n"));
+        setInboxIds(data.map((d) => d.id));
+        toast.info(`Loaded ${data.length} SMS from inbox — tap Parse to review.`);
+      }
+    });
+  }, []);
   const [accountId, setAccountId] = useState<string>("");
   const [parsing, setParsing] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
@@ -175,6 +188,10 @@ const ImportSMS = () => {
         } as any;
       }));
       toast.success(`Imported ${selected.length} transaction${selected.length > 1 ? "s" : ""}`);
+      if (inboxIds.length) {
+        await supabase.from("sms_inbox").update({ status: "approved", processed_at: new Date().toISOString() }).in("id", inboxIds);
+        setInboxIds([]);
+      }
       setRows([]); setText("");
     } catch (e) {
       const msg = (e as Error).message;

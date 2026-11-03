@@ -1,5 +1,8 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Wallet, ArrowLeftRight, MessageSquareText, LogOut, TrendingUp, BarChart3, Utensils } from "lucide-react";
+import { LayoutDashboard, Wallet, ArrowLeftRight, MessageSquareText, LogOut, BarChart3, Utensils, Inbox } from "lucide-react";
+import logo from "@/assets/logo.png";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { BackendStatusPill } from "@/components/BackendStatusPill";
@@ -10,6 +13,7 @@ const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/accounts", label: "Accounts", icon: Wallet },
   { to: "/transactions", label: "Transactions", icon: ArrowLeftRight },
+  { to: "/inbox", label: "Inbox", icon: Inbox },
   { to: "/import", label: "Import SMS", icon: MessageSquareText },
   { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/food", label: "Food", icon: Utensils },
@@ -18,14 +22,21 @@ const links = [
 export const AppLayout = () => {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
+  const { data: pending = 0 } = useQuery({
+    queryKey: ["sms_inbox_count"],
+    enabled: !!user,
+    refetchInterval: 30000,
+    queryFn: async () => {
+      const { count } = await supabase.from("sms_inbox").select("id", { count: "exact", head: true }).eq("status", "pending");
+      return count ?? 0;
+    },
+  });
 
   return (
     <div className="min-h-screen bg-background">
       <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r border-border bg-sidebar lg:flex">
         <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-gradient-primary shadow-glow">
-            <TrendingUp className="h-4 w-4 text-primary-foreground" />
-          </div>
+          <img src={logo} alt="Ledger logo" width={32} height={32} className="h-8 w-8 object-contain" />
           <span className="font-display text-lg font-semibold tracking-tight">Ledger</span>
         </div>
         <nav className="flex-1 space-y-1 p-3">
@@ -44,6 +55,7 @@ export const AppLayout = () => {
             >
               <Icon className="h-4 w-4" />
               {label}
+              {to === "/inbox" && pending > 0 && <span className="ml-auto rounded-full bg-primary px-1.5 text-xs text-primary-foreground">{pending}</span>}
             </NavLink>
           ))}
         </nav>
@@ -70,9 +82,7 @@ export const AppLayout = () => {
       {/* Mobile top bar */}
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur lg:hidden">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-primary">
-            <TrendingUp className="h-4 w-4 text-primary-foreground" />
-          </div>
+          <img src={logo} alt="Ledger logo" width={32} height={32} className="h-7 w-7 object-contain" />
           <span className="font-display font-semibold">Ledger</span>
         </div>
         <div className="flex items-center gap-2">
@@ -102,6 +112,7 @@ export const AppLayout = () => {
             >
               <Icon className="h-4 w-4" />
               {label}
+              {to === "/inbox" && pending > 0 && <span className="ml-auto rounded-full bg-primary px-1.5 text-xs text-primary-foreground">{pending}</span>}
             </NavLink>
           ))}
         </nav>

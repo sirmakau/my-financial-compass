@@ -8,6 +8,13 @@
       "when": 1793733520358,
       "tag": "0000_account_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793733980963,
+      "tag": "0001_sms_inbox_and_keys",
+      "breakpoints": true
     }
   ]
 }

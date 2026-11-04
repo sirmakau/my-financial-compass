@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAccounts, useCategories, useCreateTransactionsBatch } from "@/hooks/useFinance";
 import { formatKES, isoToLocalInputValue } from "@/lib/format";
@@ -11,8 +12,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Loader2, AlertCircle, Check, X, AlertTriangle } from "lucide-react";
+import { TrendingUp, Loader2, AlertCircle, Check, X, AlertTriangle, Inbox as InboxIcon, KeyRound, Copy, Trash2, Plus, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+
+const ENDPOINT = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/sms-webhook`;
+
+const randomToken = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, "0")).join("");
 
 
 interface ParsedTxn {
@@ -50,6 +56,64 @@ const ImportSMS = () => {
   const { data: accounts = [] } = useAccounts();
   const { data: cats = [] } = useCategories();
   const batch = useCreateTransactionsBatch();
+  const qc = useQueryClient();
+
+  // ---- Phone inbox (same page) ----
+  const inbox = useQuery({
+    queryKey: ["sms_inbox"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sms_inbox")
+        .select("*")
+        .eq("status", "pending")
+        .order("received_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    refetchInterval: 30000,
+  });
+
+  const key = useQuery({
+    queryKey: ["sms_key", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase.from("sms_webhook_keys").select("token").maybeSingle();
+      return data?.token ?? null;
+    },
+  });
+  const [phoneOpen, setPhoneOpen] = useState(false);
+
+  const genKey = async () => {
+    if (!user) return;
+    const { error } = await supabase.from("sms_webhook_keys").upsert({ user_id: user.id, token: randomToken() });
+    if (error) return toast.error("Could not create key");
+    toast.success(key.data ? "Key replaced — update your phone" : "Key created");
+    qc.invalidateQueries({ queryKey: ["sms_key"] });
+  };
+
+  const dismissMessage = async (id: string) => {
+    await supabase.from("sms_inbox").update({ status: "dismissed", processed_at: new Date().toISOString() }).eq("id", id);
+    setInboxIds((ids) => ids.filter((i) => i !== id));
+    qc.invalidateQueries({ queryKey: ["sms_inbox"] });
+    qc.invalidateQueries({ queryKey: ["sms_inbox_count"] });
+  };
+
+  const loadMessage = (m: { id: string; body: string }) => {
+    setText((t) => (t.trim() ? `${t.trim()}\n\n${m.body}` : m.body));
+    setInboxIds((ids) => (ids.includes(m.id) ? ids : [...ids, m.id]));
+  };
+
+  const loadAll = () => {
+    const items = inbox.data ?? [];
+    if (items.length === 0) return;
+    setText((t) => {
+      const existing = t.trim();
+      const bodies = items.map((i) => i.body);
+      return existing ? `${existing}\n\n${bodies.join("\n\n")}` : bodies.join("\n\n");
+    });
+    setInboxIds((ids) => Array.from(new Set([...ids, ...items.map((i) => i.id)])));
+    toast.info(`${items.length} message${items.length > 1 ? "s" : ""} added — tap Parse with AI to review.`);
+  };
 
   const [text, setText] = useState("");
   const [inboxIds, setInboxIds] = useState<string[]>([]);

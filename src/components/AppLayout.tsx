@@ -13,8 +13,7 @@ const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/accounts", label: "Accounts", icon: Wallet },
   { to: "/transactions", label: "Transactions", icon: ArrowLeftRight },
-  { to: "/inbox", label: "Inbox", icon: Inbox },
-  { to: "/import", label: "Import SMS", icon: MessageSquareText },
+  { to: "/import", label: "Messages", icon: Inbox, badge: true },
   { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/food", label: "Food", icon: Utensils },
 ];

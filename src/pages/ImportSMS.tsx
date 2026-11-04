@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAccounts, useCategories, useCreateTransactionsBatch } from "@/hooks/useFinance";
+import { useAuth } from "@/hooks/useAuth";
 import { formatKES, isoToLocalInputValue } from "@/lib/format";
 import { extractFulizaBatch, impliedOutstanding, reconcileFuliza, FULIZA_TOLERANCE } from "@/lib/fuliza";
 
@@ -53,6 +54,7 @@ const SAMPLE = `QGH7X8K9LM Confirmed. Ksh1,250.00 sent to JOHN DOE 0712345678 on
 QGH7Y2P3QR Confirmed. You have received Ksh5,000.00 from JANE SMITH 0723456789 on 2/5/26 at 2:14 PM. New M-PESA balance is Ksh9,820.00.`;
 
 const ImportSMS = () => {
+  const { user } = useAuth();
   const { data: accounts = [] } = useAccounts();
   const { data: cats = [] } = useCategories();
   const batch = useCreateTransactionsBatch();

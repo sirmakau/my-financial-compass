@@ -58,7 +58,6 @@ const App = () => (
                 <Route path="/inbox" element={<Navigate to="/import" replace />} />
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/food" element={<Food />} />
-                <Route path="/inbox" element={<Inbox />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

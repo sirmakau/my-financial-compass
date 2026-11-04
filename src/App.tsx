@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,7 +16,6 @@ import Accounts from "./pages/Accounts";
 import Transactions from "./pages/Transactions";
 import ImportSMS from "./pages/ImportSMS";
 import Reports from "./pages/Reports";
-import Inbox from "./pages/Inbox";
 import Food from "./pages/Food";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -56,9 +55,9 @@ const App = () => (
                 <Route path="/accounts" element={<Accounts />} />
                 <Route path="/transactions" element={<Transactions />} />
                 <Route path="/import" element={<ImportSMS />} />
+                <Route path="/inbox" element={<Navigate to="/import" replace />} />
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/food" element={<Food />} />
-                <Route path="/inbox" element={<Inbox />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

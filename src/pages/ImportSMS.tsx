@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAccounts, useCategories, useCreateTransactionsBatch } from "@/hooks/useFinance";
+import { useAuth } from "@/hooks/useAuth";
 import { formatKES, isoToLocalInputValue } from "@/lib/format";
 import { extractFulizaBatch, impliedOutstanding, reconcileFuliza, FULIZA_TOLERANCE } from "@/lib/fuliza";
 
@@ -11,8 +13,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Loader2, AlertCircle, Check, X, AlertTriangle } from "lucide-react";
+import { TrendingUp, Loader2, AlertCircle, Check, X, AlertTriangle, Inbox as InboxIcon, KeyRound, Copy, Trash2, Plus, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+
+const ENDPOINT = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/sms-webhook`;
+
+const randomToken = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, "0")).join("");
 
 
 interface ParsedTxn {
@@ -47,9 +54,68 @@ const SAMPLE = `QGH7X8K9LM Confirmed. Ksh1,250.00 sent to JOHN DOE 0712345678 on
 QGH7Y2P3QR Confirmed. You have received Ksh5,000.00 from JANE SMITH 0723456789 on 2/5/26 at 2:14 PM. New M-PESA balance is Ksh9,820.00.`;
 
 const ImportSMS = () => {
+  const { user } = useAuth();
   const { data: accounts = [] } = useAccounts();
   const { data: cats = [] } = useCategories();
   const batch = useCreateTransactionsBatch();
+  const qc = useQueryClient();
+
+  // ---- Phone inbox (same page) ----
+  const inbox = useQuery({
+    queryKey: ["sms_inbox"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sms_inbox")
+        .select("*")
+        .eq("status", "pending")
+        .order("received_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    refetchInterval: 30000,
+  });
+
+  const key = useQuery({
+    queryKey: ["sms_key", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase.from("sms_webhook_keys").select("token").maybeSingle();
+      return data?.token ?? null;
+    },
+  });
+  const [phoneOpen, setPhoneOpen] = useState(false);
+
+  const genKey = async () => {
+    if (!user) return;
+    const { error } = await supabase.from("sms_webhook_keys").upsert({ user_id: user.id, token: randomToken() });
+    if (error) return toast.error("Could not create key");
+    toast.success(key.data ? "Key replaced — update your phone" : "Key created");
+    qc.invalidateQueries({ queryKey: ["sms_key"] });
+  };
+
+  const dismissMessage = async (id: string) => {
+    await supabase.from("sms_inbox").update({ status: "dismissed", processed_at: new Date().toISOString() }).eq("id", id);
+    setInboxIds((ids) => ids.filter((i) => i !== id));
+    qc.invalidateQueries({ queryKey: ["sms_inbox"] });
+    qc.invalidateQueries({ queryKey: ["sms_inbox_count"] });
+  };
+
+  const loadMessage = (m: { id: string; body: string }) => {
+    setText((t) => (t.trim() ? `${t.trim()}\n\n${m.body}` : m.body));
+    setInboxIds((ids) => (ids.includes(m.id) ? ids : [...ids, m.id]));
+  };
+
+  const loadAll = () => {
+    const items = inbox.data ?? [];
+    if (items.length === 0) return;
+    setText((t) => {
+      const existing = t.trim();
+      const bodies = items.map((i) => i.body);
+      return existing ? `${existing}\n\n${bodies.join("\n\n")}` : bodies.join("\n\n");
+    });
+    setInboxIds((ids) => Array.from(new Set([...ids, ...items.map((i) => i.id)])));
+    toast.info(`${items.length} message${items.length > 1 ? "s" : ""} added — tap Parse with AI to review.`);
+  };
 
   const [text, setText] = useState("");
   const [inboxIds, setInboxIds] = useState<string[]>([]);
@@ -191,6 +257,8 @@ const ImportSMS = () => {
       if (inboxIds.length) {
         await supabase.from("sms_inbox").update({ status: "approved", processed_at: new Date().toISOString() }).in("id", inboxIds);
         setInboxIds([]);
+        qc.invalidateQueries({ queryKey: ["sms_inbox"] });
+        qc.invalidateQueries({ queryKey: ["sms_inbox_count"] });
       }
       setRows([]); setText("");
     } catch (e) {
@@ -247,11 +315,43 @@ const ImportSMS = () => {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">Import M-Pesa SMS</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">Messages &amp; Import</h1>
         <p className="text-sm text-muted-foreground">
-          Paste raw M-Pesa messages — AI extracts and categorizes them. You review and confirm before saving.
+          Messages forwarded from your phone land below — add them to the importer, let AI extract the details, then review and confirm before saving.
         </p>
       </header>
+
+      <Card className="border-border/60 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 font-semibold"><InboxIcon className="h-4 w-4" />From your phone ({(inbox.data ?? []).length})</h2>
+          {(inbox.data ?? []).length > 0 && (
+            <Button size="sm" onClick={loadAll}><Plus className="mr-1 h-4 w-4" />Add all to import</Button>
+          )}
+        </div>
+        {inbox.isLoading ? <p className="text-sm text-muted-foreground">Loading…</p>
+          : inbox.error ? <div className="text-sm text-destructive">Couldn't load inbox. <Button variant="link" size="sm" onClick={() => inbox.refetch()}>Retry</Button></div>
+          : (inbox.data ?? []).length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-6 text-center text-sm text-muted-foreground">
+              <InboxIcon className="h-8 w-8" />
+              No new messages. Once your phone is set up below, new M-Pesa SMS will show up here within seconds — or paste messages manually.
+            </div>
+          ) : (
+            <ul className="divide-y divide-border/60">
+              {(inbox.data ?? []).map((m: any) => (
+                <li key={m.id} className="flex items-start gap-3 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground">{new Date(m.received_at).toLocaleString("en-KE")}{m.sender ? ` · ${m.sender}` : ""}</p>
+                    <p className="font-mono-figure break-words text-sm">{m.body}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button size="sm" variant="outline" onClick={() => loadMessage(m)}>Add</Button>
+                    <Button size="icon" variant="ghost" aria-label="Dismiss" onClick={() => dismissMessage(m.id)}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+      </Card>
 
       <Card className="border-border/60 p-4">
         <div className="grid gap-4 md:grid-cols-[1fr_240px]">
@@ -467,6 +567,41 @@ const ImportSMS = () => {
           </div>
         </Card>
       )}
+
+      <Card className="border-border/60 p-4">
+        <button
+          type="button"
+          onClick={() => setPhoneOpen((o) => !o)}
+          className="flex w-full items-center justify-between gap-2 text-left"
+        >
+          <h2 className="flex items-center gap-2 font-semibold"><KeyRound className="h-4 w-4" />Phone setup (MacroDroid / Tasker)</h2>
+          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${phoneOpen ? "rotate-180" : ""}`} />
+        </button>
+        {phoneOpen && (
+          <div className="mt-3 space-y-3">
+            {key.data ? (
+              <>
+                <label className="text-xs text-muted-foreground">Web address</label>
+                <div className="flex gap-2"><Input readOnly value={ENDPOINT} className="font-mono-figure text-xs" /><Button size="icon" variant="outline" aria-label="Copy address" onClick={() => { navigator.clipboard.writeText(ENDPOINT); toast.success("Copied"); }}><Copy className="h-4 w-4" /></Button></div>
+                <label className="text-xs text-muted-foreground">Your private key (keep secret)</label>
+                <div className="flex gap-2"><Input readOnly value={key.data} className="font-mono-figure text-xs" /><Button size="icon" variant="outline" aria-label="Copy key" onClick={() => { navigator.clipboard.writeText(key.data!); toast.success("Copied"); }}><Copy className="h-4 w-4" /></Button></div>
+                <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+                  <li>In MacroDroid add trigger <b>SMS Received</b> from sender <b>MPESA</b>.</li>
+                  <li>Add action <b>HTTP Request</b> → POST to the web address above.</li>
+                  <li>Add header <code>x-ledger-key</code> with your key.</li>
+                  <li>Body (JSON): <code>{`{"message": "[sms_message]", "sender": "[sms_number]"}`}</code></li>
+                </ol>
+                <Button variant="outline" size="sm" onClick={genKey}>Replace key</Button>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Generate a private key so your phone can forward M-Pesa SMS straight into this page.</p>
+                <Button size="sm" onClick={genKey}>Create my private key</Button>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
     </div>
   );
 };

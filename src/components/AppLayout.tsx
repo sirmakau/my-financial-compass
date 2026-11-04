@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Wallet, ArrowLeftRight, MessageSquareText, LogOut, BarChart3, Utensils, Inbox } from "lucide-react";
+import { LayoutDashboard, Wallet, ArrowLeftRight, LogOut, BarChart3, Utensils, Inbox } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,8 +13,7 @@ const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/accounts", label: "Accounts", icon: Wallet },
   { to: "/transactions", label: "Transactions", icon: ArrowLeftRight },
-  { to: "/inbox", label: "Inbox", icon: Inbox },
-  { to: "/import", label: "Import SMS", icon: MessageSquareText },
+  { to: "/import", label: "Messages", icon: Inbox, badge: true },
   { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/food", label: "Food", icon: Utensils },
 ];
@@ -40,7 +39,7 @@ export const AppLayout = () => {
           <span className="font-display text-lg font-semibold tracking-tight">Ledger</span>
         </div>
         <nav className="flex-1 space-y-1 p-3">
-          {links.map(({ to, label, icon: Icon, end }) => (
+          {links.map(({ to, label, icon: Icon, end, badge }) => (
             <NavLink
               key={to}
               to={to}
@@ -55,7 +54,7 @@ export const AppLayout = () => {
             >
               <Icon className="h-4 w-4" />
               {label}
-              {to === "/inbox" && pending > 0 && <span className="ml-auto rounded-full bg-primary px-1.5 text-xs text-primary-foreground">{pending}</span>}
+              {badge && pending > 0 && <span className="ml-auto rounded-full bg-primary px-1.5 text-xs text-primary-foreground">{pending}</span>}
             </NavLink>
           ))}
         </nav>
@@ -99,7 +98,7 @@ export const AppLayout = () => {
         </div>
         {/* Mobile bottom nav */}
         <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-background/95 backdrop-blur lg:hidden">
-          {links.map(({ to, label, icon: Icon, end }) => (
+          {links.map(({ to, label, icon: Icon, end, badge }) => (
             <NavLink
               key={to}
               to={to}
@@ -112,7 +111,7 @@ export const AppLayout = () => {
             >
               <Icon className="h-4 w-4" />
               {label}
-              {to === "/inbox" && pending > 0 && <span className="ml-auto rounded-full bg-primary px-1.5 text-xs text-primary-foreground">{pending}</span>}
+              {badge && pending > 0 && <span className="ml-auto rounded-full bg-primary px-1.5 text-xs text-primary-foreground">{pending}</span>}
             </NavLink>
           ))}
         </nav>

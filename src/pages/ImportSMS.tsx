@@ -257,6 +257,8 @@ const ImportSMS = () => {
       if (inboxIds.length) {
         await supabase.from("sms_inbox").update({ status: "approved", processed_at: new Date().toISOString() }).in("id", inboxIds);
         setInboxIds([]);
+        qc.invalidateQueries({ queryKey: ["sms_inbox"] });
+        qc.invalidateQueries({ queryKey: ["sms_inbox_count"] });
       }
       setRows([]); setText("");
     } catch (e) {

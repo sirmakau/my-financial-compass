@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -56,6 +56,7 @@ const App = () => (
                 <Route path="/accounts" element={<Accounts />} />
                 <Route path="/transactions" element={<Transactions />} />
                 <Route path="/import" element={<ImportSMS />} />
+                <Route path="/inbox" element={<Navigate to="/import" replace />} />
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/food" element={<Food />} />
                 <Route path="/inbox" element={<Inbox />} />

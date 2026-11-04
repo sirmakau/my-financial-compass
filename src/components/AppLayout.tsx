@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Wallet, ArrowLeftRight, MessageSquareText, LogOut, BarChart3, Utensils, Inbox } from "lucide-react";
+import { LayoutDashboard, Wallet, ArrowLeftRight, LogOut, BarChart3, Utensils, Inbox } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";

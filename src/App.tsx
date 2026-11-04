@@ -15,8 +15,6 @@ import Dashboard from "./pages/Dashboard";
 import Accounts from "./pages/Accounts";
 import Transactions from "./pages/Transactions";
 import ImportSMS from "./pages/ImportSMS";
-import Reports from "./pages/Reports";
-import Inbox from "./pages/Inbox";
 import Food from "./pages/Food";
 import NotFound from "./pages/NotFound.tsx";
 

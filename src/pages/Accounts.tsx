@@ -196,7 +196,8 @@ const Accounts = () => {
                   </div>
                 </div>
                 <div className={`mt-4 font-mono-figure text-2xl font-semibold ${a.type === "debt" ? "text-outflow" : ""}`}>
-                  {formatKES(balance)}
+                  {formatKES(a.type === "debt" ? Math.abs(balance) : balance)}
+                  {a.type === "debt" && <span className="ml-1 text-xs font-normal text-muted-foreground">owed</span>}
                 </div>
                 {a.notes && <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{a.notes}</p>}
               </Card>

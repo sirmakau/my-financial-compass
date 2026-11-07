@@ -55,7 +55,8 @@ const Dashboard = () => {
     const fulizaOwed = fulizaAcc ? Math.abs(Number(fulizaAcc.balance)) : 0;
     const fulizaLimit = fulizaAcc ? Number(fulizaAcc.credit_limit ?? 0) : 0;
     // Net available M-Pesa: positive cash, or negative when on Fuliza
-    const net = cash - fulizaOwed;
+    // M-Pesa balance already mirrors Fuliza (−200 ⇔ Fuliza 200), so don't subtract twice.
+    const net = cash < 0 ? cash : cash - fulizaOwed;
     return { cash, fulizaOwed, fulizaLimit, net, hasFuliza: !!fulizaAcc };
   }, [accounts]);
 

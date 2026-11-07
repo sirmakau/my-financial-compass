@@ -7,7 +7,6 @@ BEGIN
   SELECT * INTO v_mpesa FROM public.accounts
     WHERE user_id = v_user AND type = 'cash' AND name ~* '^\s*m[-\s]?pesa\s*$' LIMIT 1;
   IF NOT FOUND OR v_acct <> v_mpesa.id THEN RETURN COALESCE(NEW, OLD); END IF;
-  -- Mirror: M-Pesa -200 => Fuliza owes 200 (stored as -200); M-Pesa >= 0 => Fuliza 0
   UPDATE public.accounts SET balance = LEAST(0, v_mpesa.balance), updated_at = now()
     WHERE user_id = v_user AND type = 'debt' AND (name ILIKE '%fuliza%' OR subtype ILIKE '%fuliza%');
   RETURN COALESCE(NEW, OLD);

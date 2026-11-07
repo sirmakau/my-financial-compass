@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ArrowRight, BarChart3, BookOpen, CheckCircle2, Smartphone } from "lucide-react";
+import { ArrowDownToLine, ArrowRight, BarChart3, BookOpen, CheckCircle2, ExternalLink, Smartphone } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { PublicNavbar } from "@/components/PublicNavbar";
@@ -74,6 +74,32 @@ const Landing = () => (
                 <li key={item} className="flex gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-primary" /> {item}</li>
               ))}
             </ul>
+          </div>
+        </div>
+      </section>
+      <section className="border-t border-border/60">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-12 md:flex-row md:items-center md:justify-between lg:px-8">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-primary">Project Links</p>
+            <h2 className="mt-2 font-display text-2xl font-semibold">Explore My Financial Compass</h2>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <a
+              href="https://my-financial-ledger.vercel.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              View Live Project <ExternalLink className="h-4 w-4" />
+            </a>
+            <a
+              href="https://github.com/sirmakau/my-financial-compass"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2.5 text-sm font-medium hover:bg-secondary"
+            >
+              View Source Code <ExternalLink className="h-4 w-4" />
+            </a>
           </div>
         </div>
       </section>

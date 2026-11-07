@@ -10,6 +10,7 @@ import {
   BookOpen,
   CheckCircle2,
   ChevronRight,
+  ExternalLink,
   FileText,
 } from "lucide-react";
 
@@ -277,6 +278,46 @@ const Documentation = () => {
             </div>
           </div>
         </header>
+
+        <section
+          aria-labelledby="project-links-heading"
+          className="mb-10 rounded-xl border border-border/70 bg-card p-5 shadow-sm md:p-6"
+        >
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+                Project Links
+              </p>
+              <h2
+                id="project-links-heading"
+                className="mt-1 font-display text-xl font-semibold tracking-tight text-foreground"
+              >
+                Explore My Financial Compass
+              </h2>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <a
+                href="https://my-financial-ledger.vercel.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                View Live Project
+                <ExternalLink className="h-4 w-4" />
+              </a>
+              <a
+                href="https://github.com/sirmakau/my-financial-compass"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                View Source Code
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </div>
+          </div>
+        </section>
 
         {/* IMPLEMENTATION STATUS */}
 

@@ -6,6 +6,7 @@ import { QuickAddTransaction } from "@/components/QuickAddTransaction";
 import { ArrowDownRight, ArrowUpRight, Wallet, TrendingUp, Landmark, HandCoins, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell } from "recharts";
+import { calculateFinancialTotals, calculateMpesaAvailable, isFuliza } from "@/lib/finance";
 
 const niceStep = (raw: number) => {
   if (raw <= 0) return 1;
@@ -38,15 +39,19 @@ const Dashboard = () => {
   const { data: cats = [] } = useCategories();
 
   const totals = useMemo(() => {
-    const by: Record<string, number> = { cash: 0, investment: 0, debt: 0, receivable: 0 };
-    accounts.forEach((a) => { by[a.type] += Number(a.balance); });
-    const netWorth = by.cash + by.investment + by.receivable - Math.abs(by.debt);
-    return { by, netWorth };
+    const calculated = calculateFinancialTotals(accounts);
+    return {
+      by: {
+        cash: calculated.totalCash,
+        investment: calculated.totalInvestments,
+        debt: calculated.totalDebt,
+        receivable: calculated.totalReceivables,
+      },
+      netWorth: calculated.netWorth,
+    };
   }, [accounts]);
 
   const mpesa = useMemo(() => {
-    const isFuliza = (a: typeof accounts[number]) =>
-      /fuliza/i.test(a.name) || /fuliza/i.test(a.subtype ?? "");
     const isMpesaCash = (a: typeof accounts[number]) =>
       a.type === "cash" && (/m[-\s]?pesa/i.test(a.name) || /m[-\s]?pesa/i.test(a.subtype ?? ""));
 
@@ -54,9 +59,7 @@ const Dashboard = () => {
     const fulizaAcc = accounts.find((a) => a.type === "debt" && isFuliza(a));
     const fulizaOwed = fulizaAcc ? Math.abs(Number(fulizaAcc.balance)) : 0;
     const fulizaLimit = fulizaAcc ? Number(fulizaAcc.credit_limit ?? 0) : 0;
-    // Net available M-Pesa: positive cash, or negative when on Fuliza
-    // M-Pesa balance already mirrors Fuliza (−200 ⇔ Fuliza 200), so don't subtract twice.
-    const net = cash < 0 ? cash : cash - fulizaOwed;
+    const net = calculateMpesaAvailable(cash, fulizaOwed);
     return { cash, fulizaOwed, fulizaLimit, net, hasFuliza: !!fulizaAcc };
   }, [accounts]);
 

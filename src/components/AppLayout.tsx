@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Wallet, ArrowLeftRight, LogOut, BarChart3, Utensils, Inbox } from "lucide-react";
+import { LayoutDashboard, Wallet, ArrowLeftRight, LogOut, BarChart3, Utensils, Inbox, BookOpen } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,12 +10,13 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 
 
 const links = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/app", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/accounts", label: "Accounts", icon: Wallet },
   { to: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { to: "/import", label: "Messages", icon: Inbox, badge: true },
   { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/food", label: "Food", icon: Utensils },
+  { to: "/Documentation", label: "Documentation", icon: BookOpen },
 ];
 
 export const AppLayout = () => {
@@ -97,14 +98,14 @@ export const AppLayout = () => {
           <Outlet />
         </div>
         {/* Mobile bottom nav */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-background/95 backdrop-blur lg:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-border bg-background/95 backdrop-blur lg:hidden">
           {links.map(({ to, label, icon: Icon, end, badge }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
               className={({ isActive }) =>
-                `flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] ${
+                `flex min-w-[4.5rem] flex-1 flex-col items-center gap-0.5 py-2 text-[10px] ${
                   isActive ? "text-primary" : "text-muted-foreground"
                 }`
               }

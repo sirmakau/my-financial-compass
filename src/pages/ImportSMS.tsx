@@ -5,6 +5,7 @@ import { useAccounts, useCategories, useCreateTransactionsBatch } from "@/hooks/
 import { useAuth } from "@/hooks/useAuth";
 import { formatKES, isoToLocalInputValue } from "@/lib/format";
 import { extractFulizaBatch, impliedOutstanding, reconcileFuliza, FULIZA_TOLERANCE } from "@/lib/fuliza";
+import { isFuliza } from "@/lib/finance";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -151,7 +152,7 @@ const ImportSMS = () => {
 
   const mpesaAccounts = useMemo(() => accounts.filter((a) => a.type === "cash"), [accounts]);
   const fulizaAccount = useMemo(
-    () => accounts.find((a) => a.type === "debt" && (/fuliza/i.test(a.name) || /fuliza/i.test(a.subtype ?? ""))),
+    () => accounts.find((a) => a.type === "debt" && isFuliza(a)),
     [accounts],
   );
 

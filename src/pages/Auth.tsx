@@ -24,7 +24,7 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (!authLoading && session) return <Navigate to="/" replace />;
+  if (!authLoading && session) return <Navigate to="/app" replace />;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,14 +43,14 @@ const Auth = () => {
         });
         if (error) throw error;
         toast.success("Account created. Welcome!");
-        nav("/", { replace: true });
+        nav("/app", { replace: true });
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email: parsed.data.email,
           password: parsed.data.password,
         });
         if (error) throw error;
-        nav("/", { replace: true });
+        nav("/app", { replace: true });
       }
     } catch (err) {
       toast.error((err as Error).message);
@@ -99,6 +99,9 @@ const Auth = () => {
         </Card>
         <p className="mt-6 text-center text-xs text-muted-foreground">
           Your financial data is private and encrypted. AI never modifies data without confirmation.
+        </p>
+        <p className="mt-3 text-center text-xs">
+          <a href="/Documentation" className="text-primary hover:underline">Read the documentation</a>
         </p>
       </div>
     </div>

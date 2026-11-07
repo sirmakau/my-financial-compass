@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { z } from "zod";
-import { supabase } from "@/integrations/supabase/client";
+import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,11 @@ const Auth = () => {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isSupabaseConfigured) {
+      toast.error("Authentication is not configured for this deployment.");
+      return;
+    }
+
     const parsed = schema.safeParse({ email, password });
     if (!parsed.success) {
       toast.error(parsed.error.errors[0].message);

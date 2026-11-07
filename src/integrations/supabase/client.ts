@@ -5,11 +5,17 @@ import { brokeredPreviewStorage } from './previewAuthStorage';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
+
+// Keep public pages available when deployment configuration is incomplete.
+// Authenticated features remain unavailable until the real values are supplied.
+const clientUrl = SUPABASE_URL || 'https://placeholder.supabase.co';
+const clientKey = SUPABASE_PUBLISHABLE_KEY || 'placeholder-publishable-key';
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<Database>(clientUrl, clientKey, {
   auth: {
     storage: brokeredPreviewStorage(),
     persistSession: true,

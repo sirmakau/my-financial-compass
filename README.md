@@ -119,6 +119,17 @@ npm run dev
 
 Vite will print the local URL, normally `http://localhost:5173`.
 
+### Configure Vercel
+
+For a Vercel deployment, add the same three `VITE_SUPABASE_*` variables in the
+project's Settings > Environment Variables for the Preview and Production
+environments, then redeploy. Vite embeds `VITE_*` values into the browser
+bundle at build time, so changing them requires a new deployment.
+
+The public landing, Apps, and Documentation pages still render if these values
+are missing. Sign-in and authenticated financial features require a valid
+Supabase URL and publishable key.
+
 ## Available commands
 
 ```bash

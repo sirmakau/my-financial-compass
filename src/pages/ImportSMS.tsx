@@ -84,6 +84,18 @@ const ImportSMS = () => {
     },
   });
   const [phoneOpen, setPhoneOpen] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const toggleSel = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const addSelected = () => {
+    const items = (inbox.data ?? []).filter((m) => selected.includes(m.id));
+    items.forEach((m) => loadMessage(m));
+    if (items.length) toast.info(`${items.length} message${items.length > 1 ? "s" : ""} added — tap Parse with AI.`);
+    setSelected([]);
+  };
+  const dismissSelected = async () => {
+    for (const id of selected) await dismissMessage(id);
+    setSelected([]);
+  };
 
   const genKey = async () => {
     if (!user) return;
@@ -325,7 +337,23 @@ const ImportSMS = () => {
         <div className="flex items-center justify-between gap-2">
           <h2 className="flex items-center gap-2 font-semibold"><InboxIcon className="h-4 w-4" />From your phone ({(inbox.data ?? []).length})</h2>
           {(inbox.data ?? []).length > 0 && (
-            <Button size="sm" onClick={loadAll}><Plus className="mr-1 h-4 w-4" />Add all to import</Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-1 text-xs">
+                <input
+                  type="checkbox"
+                  checked={selected.length === (inbox.data ?? []).length}
+                  onChange={(e) => setSelected(e.target.checked ? (inbox.data ?? []).map((m) => m.id) : [])}
+                />
+                Select all
+              </label>
+              {selected.length > 0 && (
+                <>
+                  <Button size="sm" variant="outline" onClick={addSelected}>Add selected ({selected.length})</Button>
+                  <Button size="sm" variant="ghost" onClick={dismissSelected}>Dismiss ({selected.length})</Button>
+                </>
+              )}
+              <Button size="sm" onClick={loadAll}><Plus className="mr-1 h-4 w-4" />Add all</Button>
+            </div>
           )}
         </div>
         {inbox.isLoading ? <p className="text-sm text-muted-foreground">Loading…</p>
@@ -339,6 +367,7 @@ const ImportSMS = () => {
             <ul className="divide-y divide-border/60">
               {(inbox.data ?? []).map((m: any) => (
                 <li key={m.id} className="flex items-start gap-3 py-3">
+                  <input type="checkbox" className="mt-1" aria-label="Select message" checked={selected.includes(m.id)} onChange={() => toggleSel(m.id)} />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-muted-foreground">{new Date(m.received_at).toLocaleString("en-KE")}{m.sender ? ` · ${m.sender}` : ""}</p>
                     <p className="font-mono-figure break-words text-sm">{m.body}</p>

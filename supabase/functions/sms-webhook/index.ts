@@ -4,9 +4,10 @@ import { z } from "npm:zod@3";
 
 const Body = z.object({
   token: z.string().min(16).max(128).optional(),
-  message: z.string().min(10).max(2000),
+  message: z.string().min(1).max(10000).optional(),
+  messages: z.array(z.string().max(2000)).max(50).optional(),
   sender: z.string().max(64).optional(),
-});
+}).refine((b) => b.message || b.messages?.length, { message: "message or messages required" });
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -27,10 +28,18 @@ Deno.serve(async (req) => {
   const { data: key } = await admin.from("sms_webhook_keys").select("user_id").eq("token", token).maybeSingle();
   if (!key) return json(401, { error: "unauthorized", message: "Invalid key" });
 
-  const msg = parsed.data.message.trim();
-  if (!/m-?pesa|fuliza|confirmed|ksh/i.test(msg)) return json(200, { ok: true, skipped: "not_financial" });
+  // Accept an array, or one body that may contain several SMS separated by blank lines.
+  const list = (parsed.data.messages ?? parsed.data.message!.split(/\n\s*\n/))
+    .map((m) => m.trim())
+    .filter((m) => m.length >= 10 && /m-?pesa|fuliza|confirmed|ksh/i.test(m));
+  if (list.length === 0) return json(200, { ok: true, skipped: "not_financial" });
 
-  const { error } = await admin.from("sms_inbox").insert({ user_id: key.user_id, body: msg, sender: parsed.data.sender ?? null });
-  if (error && error.code !== "23505") { console.error(error); return json(500, { error: "internal_error" }); }
-  return json(200, { ok: true, duplicate: error?.code === "23505" });
+  let inserted = 0, duplicates = 0;
+  for (const body of list) {
+    const { error } = await admin.from("sms_inbox").insert({ user_id: key.user_id, body, sender: parsed.data.sender ?? null });
+    if (!error) inserted++;
+    else if (error.code === "23505") duplicates++;
+    else { console.error(error); return json(500, { error: "internal_error" }); }
+  }
+  return json(200, { ok: true, inserted, duplicates, duplicate: inserted === 0 && duplicates > 0 });
 });
